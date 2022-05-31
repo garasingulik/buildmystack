@@ -28,7 +28,7 @@ USER gitlab-runner
 
 # copy build script
 COPY build.sh build.sh
-RUN sudo chmod +x build.sh
+RUN sudo chown gitlab-runner:gitlab-runner build.sh && sudo chmod +x build.sh
 
 # run build script
 RUN ./build.sh
