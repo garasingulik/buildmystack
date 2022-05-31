@@ -1,5 +1,8 @@
 FROM gitlab/gitlab-runner:ubuntu
 
+# container user
+ARG CONTAINER_USER=gitlab-runner
+
 # disable prompt
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -20,13 +23,11 @@ RUN localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
 RUN rm -rf /var/lib/apt/lists/*  /tmp/libssl*.deb
 
 # set user
-ENV CONTAINER_USER=gitlab-runner
-
 # uncomment this line if you're building from scratch
-# RUN useradd -ms /bin/bash ${CONTAINER_USER} -p ${CONTAINER_USER}
-RUN echo "${CONTAINER_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-WORKDIR /home/${CONTAINER_USER}
-USER ${CONTAINER_USER}
+# RUN useradd -ms /bin/bash $CONTAINER_USER -p $CONTAINER_USER
+RUN echo "$CONTAINER_USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+WORKDIR /home/$CONTAINER_USER
+USER $CONTAINER_USER
 
 # copy build script
 COPY build.sh build.sh
