@@ -61,3 +61,6 @@ source ~/.profile
 # android sdkmanager
 yes | sdkmanager --licenses
 sdkmanager --install "platform-tools" "platforms;android-30" "build-tools;32.0.0"
+
+# cleanup
+brew cleanup
