@@ -1,15 +1,17 @@
-name: Docker Image CI
+name: Build Docker Image
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Check out the repo
         uses: actions/checkout@v3
+
       - name: Build the Docker image
         run: docker build . --file Dockerfile --tag buildmystack:$(date +%s)
