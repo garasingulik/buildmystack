@@ -1,8 +1,5 @@
 FROM gitlab/gitlab-runner:ubuntu
 
-# container user
-ARG CONTAINER_USER=gitlab-runner
-
 # disable prompt
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -24,10 +21,10 @@ RUN rm -rf /var/lib/apt/lists/*  /tmp/libssl*.deb
 
 # set user
 # uncomment this line if you're building from scratch
-# RUN useradd -ms /bin/bash $CONTAINER_USER -p $CONTAINER_USER
-RUN echo "$CONTAINER_USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-WORKDIR /home/$CONTAINER_USER
-USER $CONTAINER_USER
+# RUN useradd -ms /bin/bash gitlab-runner -p gitlab-runner
+RUN echo "gitlab-runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+WORKDIR /home/gitlab-runner
+USER gitlab-runner
 
 # copy build script
 COPY build.sh build.sh
