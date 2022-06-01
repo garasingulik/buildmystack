@@ -4,6 +4,8 @@
 NODEJS_VERSION=16.15.0
 PYTHON_VERSION=3.10.4
 JAVA_VERSION=adoptopenjdk-14.0.2+12
+GOLANG_VERSION=1.18.2
+FLUTTER_VERSION=3.0.1-stable
 
 # android cli
 ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
@@ -28,12 +30,12 @@ source ~/.profile
 # asdf configuration
 echo "legacy_version_file = yes" >> ~/.asdfrc
 
-# set nodejs global version
+# install tooling
 tools_install nodejs $NODEJS_VERSION
-# set python global version
 tools_install python $PYTHON_VERSION
-# set java global version
 tools_install java $JAVA_VERSION
+tools_install golang $GOLANG_VERSION
+tools_install flutter $FLUTTER_VERSION
 
 # plugin config
 echo -e ". ~/.asdf/plugins/java/set-java-home.bash" >> ~/.profile
