@@ -35,5 +35,5 @@ RUN ./build.sh && rm build.sh
 # set environment variables
 ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
-# cmd
-CMD ["/bin/bash -l"]
+# shell
+SHELL ["/bin/bash", "-l"]
