@@ -15,10 +15,6 @@ RUN apt install -y /tmp/libssl1.1_1.1.0l-1~deb9u6_amd64.deb
 # set locale
 RUN localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
 
-# gitlab runner
-# RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | bash
-# RUN apt install -y gitlab-runner
-
 # clean up image
 RUN rm -rf /var/lib/apt/lists/*  /tmp/libssl*.deb
 
@@ -28,21 +24,16 @@ RUN echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 WORKDIR /home/runner
 USER runner
 
-# install docker
-RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-RUN sudo apt update && sudo apt -y install docker-ce
-RUN sudo usermod -aG docker runner
-
 # copy build script
-COPY build.sh build.sh
+ARG TOOLS=base
+COPY build_scripts/build-${TOOLS}.sh build.sh
 RUN sudo chmod +x build.sh
 
-# run build script
-RUN ./build.sh
-
-# cleanup build script
-RUN rm build.sh
+# run build & clean script
+RUN ./build.sh && rm build.sh
 
 # set environment variables
 ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+
+# entrypoint
+ENTRYPOINT ["/bin/bash", "-l"]

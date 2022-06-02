@@ -1,11 +1,7 @@
 #!/bin/bash
 
 # tooling version
-NODEJS_VERSION=16.15.0
-PYTHON_VERSION=3.10.4
 JAVA_VERSION=adoptopenjdk-14.0.2+12
-GOLANG_VERSION=1.18.2
-FLUTTER_VERSION=3.0.1-stable
 
 # android cli
 ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
@@ -17,25 +13,8 @@ function tools_install() {
   asdf global $1 $2
 }
 
-# install homebrew
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-echo 'eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv)' >> ~/.profile
-source ~/.profile
-
-# install asdf
-brew install asdf
-echo ". /home/linuxbrew/.linuxbrew/opt/asdf/libexec/asdf.sh" >> ~/.profile
-source ~/.profile
-
-# asdf configuration
-echo "legacy_version_file = yes" >> ~/.asdfrc
-
 # install tooling
-tools_install nodejs $NODEJS_VERSION
-tools_install python $PYTHON_VERSION
 tools_install java $JAVA_VERSION
-tools_install golang $GOLANG_VERSION
-tools_install flutter $FLUTTER_VERSION
 
 # plugin config
 echo -e ". ~/.asdf/plugins/java/set-java-home.bash" >> ~/.profile
@@ -63,6 +42,3 @@ source ~/.profile
 # android sdkmanager
 yes | sdkmanager --licenses
 sdkmanager --install "platform-tools" "platforms;android-30" "build-tools;32.0.0"
-
-# cleanup
-brew cleanup
