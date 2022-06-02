@@ -36,13 +36,16 @@ jobs:
 
       - name: Build and push Docker base image
         run: |
-          docker build . --file Dockerfile --tag feedsbrain/buildmystack:latest feedsbrain/buildmystack:base feedsbrain/buildmystack:base-{{version}}
+          docker build -f Dockerfile -t feedsbrain/buildmystack:latest .
+          docker tag feedsbrain/buildmystack:latest feedsbrain/buildmystack:base
+          docker tag feedsbrain/buildmystack:base feedsbrain/buildmystack:base-{{version}}
           docker push feedsbrain/buildmystack:base
           docker push feedsbrain/buildmystack:base-{{version}}
           docker push feedsbrain/buildmystack:latest
 
       - name: Build and push Docker nodejs image
         run: |
-          docker build . --file Dockerfile-tools --tag feedsbrain/buildmystack:nodejs feedsbrain/buildmystack:nodejs-{{version}} --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=nodejs
+          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=nodejs -t feedsbrain/buildmystack:nodejs .
+          docker tag feedsbrain/buildmystack:nodejs feedsbrain/buildmystack:nodejs-{{version}}        
           docker push feedsbrain/buildmystack:nodejs
           docker push feedsbrain/buildmystack:nodejs-{{version}}
