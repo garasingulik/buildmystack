@@ -1,6 +1,6 @@
 # set base image
 ARG IMAGE_BASE=base
-FROM feedsbrain/buildmystack:${IMAGE_BASE}
+FROM buildmystack:${IMAGE_BASE}
 
 # shell
 SHELL ["/bin/bash", "-l", "-c"]
