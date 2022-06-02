@@ -49,7 +49,7 @@ jobs:
         run: |
           VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
 
-          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=nodejs -t feedsbrain/buildmystack:nodejs .
+          docker build -f Dockerfile-tools --build-arg TOOLS=nodejs -t feedsbrain/buildmystack:nodejs .
           docker tag feedsbrain/buildmystack:nodejs feedsbrain/buildmystack:nodejs-$VERSION
           docker push feedsbrain/buildmystack:nodejs
           docker push feedsbrain/buildmystack:nodejs-$VERSION
@@ -58,7 +58,7 @@ jobs:
         run: |
           VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
 
-          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=golang -t feedsbrain/buildmystack:golang .
+          docker build -f Dockerfile-tools --build-arg TOOLS=golang -t feedsbrain/buildmystack:golang .
           docker tag feedsbrain/buildmystack:golang feedsbrain/buildmystack:golang-$VERSION
           docker push feedsbrain/buildmystack:golang
           docker push feedsbrain/buildmystack:golang-$VERSION
@@ -67,7 +67,7 @@ jobs:
         run: |
           VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
 
-          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=android -t feedsbrain/buildmystack:android .
+          docker build -f Dockerfile-tools --build-arg TOOLS=android -t feedsbrain/buildmystack:android .
           docker tag feedsbrain/buildmystack:android feedsbrain/buildmystack:android-$VERSION
           docker push feedsbrain/buildmystack:android
           docker push feedsbrain/buildmystack:android-$VERSION
@@ -76,7 +76,7 @@ jobs:
         run: |
           VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
 
-          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:android --build-arg TOOLS=flutter -t feedsbrain/buildmystack:flutter .
+          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=android --build-arg TOOLS=flutter -t feedsbrain/buildmystack:flutter .
           docker tag feedsbrain/buildmystack:flutter feedsbrain/buildmystack:flutter-$VERSION
           docker push feedsbrain/buildmystack:flutter
           docker push feedsbrain/buildmystack:flutter-$VERSION
