@@ -52,7 +52,7 @@ jobs:
           docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=nodejs -t feedsbrain/buildmystack:nodejs .
           docker tag feedsbrain/buildmystack:nodejs feedsbrain/buildmystack:nodejs-$VERSION
           docker push feedsbrain/buildmystack:nodejs
-          docker push feedsbrain/buildmystack:nodejs-${{version}}
+          docker push feedsbrain/buildmystack:nodejs-$VERSION
 
       - name: Build and push Docker golang image
         run: |
