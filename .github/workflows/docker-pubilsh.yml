@@ -36,16 +36,47 @@ jobs:
 
       - name: Build and push Docker base image
         run: |
+          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+
           docker build -f Dockerfile -t feedsbrain/buildmystack:latest .
           docker tag feedsbrain/buildmystack:latest feedsbrain/buildmystack:base
-          docker tag feedsbrain/buildmystack:base feedsbrain/buildmystack:base-{{version}}
+          docker tag feedsbrain/buildmystack:base feedsbrain/buildmystack:base-$VERSION
           docker push feedsbrain/buildmystack:base
-          docker push feedsbrain/buildmystack:base-{{version}}
+          docker push feedsbrain/buildmystack:base-$VERSION
           docker push feedsbrain/buildmystack:latest
 
       - name: Build and push Docker nodejs image
         run: |
+          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+
           docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=nodejs -t feedsbrain/buildmystack:nodejs .
-          docker tag feedsbrain/buildmystack:nodejs feedsbrain/buildmystack:nodejs-{{version}}        
+          docker tag feedsbrain/buildmystack:nodejs feedsbrain/buildmystack:nodejs-$VERSION
           docker push feedsbrain/buildmystack:nodejs
-          docker push feedsbrain/buildmystack:nodejs-{{version}}
+          docker push feedsbrain/buildmystack:nodejs-${{version}}
+
+      - name: Build and push Docker golang image
+        run: |
+          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+
+          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=golang -t feedsbrain/buildmystack:golang .
+          docker tag feedsbrain/buildmystack:golang feedsbrain/buildmystack:golang-$VERSION
+          docker push feedsbrain/buildmystack:golang
+          docker push feedsbrain/buildmystack:golang-$VERSION
+
+      - name: Build and push Docker android image
+        run: |
+          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+
+          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:base --build-arg TOOLS=android -t feedsbrain/buildmystack:android .
+          docker tag feedsbrain/buildmystack:android feedsbrain/buildmystack:android-$VERSION
+          docker push feedsbrain/buildmystack:android
+          docker push feedsbrain/buildmystack:android-$VERSION
+
+      - name: Build and push Docker flutter image
+        run: |
+          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+
+          docker build -f Dockerfile-tools --build-arg IMAGE_BASE=feedsbrain/buildmystack:android --build-arg TOOLS=flutter -t feedsbrain/buildmystack:flutter .
+          docker tag feedsbrain/buildmystack:flutter feedsbrain/buildmystack:flutter-$VERSION
+          docker push feedsbrain/buildmystack:flutter
+          docker push feedsbrain/buildmystack:flutter-$VERSION
