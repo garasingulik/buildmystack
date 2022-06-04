@@ -6,7 +6,8 @@ ENV DEBIAN_FRONTEND noninteractive
 # install required packages
 RUN apt update && apt install -y locales build-essential git curl sudo make jq unzip libssl-dev zlib1g-dev \
   libbz2-dev libreadline-dev libsqlite3-dev wget llvm libncursesw5-dev xz-utils tk-dev libxml2-dev \
-  libxmlsec1-dev libffi-dev liblzma-dev apt-transport-https ca-certificates software-properties-common
+  libxmlsec1-dev libffi-dev liblzma-dev apt-transport-https ca-certificates software-properties-common \
+  cmake ninja-build libgtk-3-dev
 
 # install open ssl 1.1.1 for backward compatibility (ubuntu:jammy)
 RUN curl -o /tmp/libssl1.1_1.1.0l-1~deb9u6_amd64.deb http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.0l-1~deb9u6_amd64.deb
