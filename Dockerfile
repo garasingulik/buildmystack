@@ -44,4 +44,4 @@ RUN ./build.sh && rm build.sh
 ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
 # shell
-ENTRYPOINT ["/usr/bin/docker-entrypont.sh"]
+ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
