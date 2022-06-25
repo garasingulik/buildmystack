@@ -71,7 +71,7 @@ rm -f cli-tools.zip
 # set android home path
 echo "" >> $PROFILE_CONFIG
 echo "# android" >> $PROFILE_CONFIG
-echo 'export ANDROID_HOME=$HOME/Library/Android/sdk' >> $PROFILE_CONFIG
+echo 'export ANDROID_HOME=$HOME/android/sdk' >> $PROFILE_CONFIG
 echo 'export PATH=$PATH:$ANDROID_HOME/emulator' >> $PROFILE_CONFIG
 echo 'export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest' >> $PROFILE_CONFIG
 echo 'export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin' >> $PROFILE_CONFIG
