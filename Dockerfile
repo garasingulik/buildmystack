@@ -33,6 +33,10 @@ USER runner
 COPY build_scripts/build.sh build.sh
 RUN sudo chmod +x build.sh
 
+# copy entrypoint
+COPY ./docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
+RUN sudo chmod +x /usr/bin/docker-entrypoint.sh
+
 # run build & clean script
 RUN ./build.sh && rm build.sh
 
@@ -40,4 +44,4 @@ RUN ./build.sh && rm build.sh
 ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
 # shell
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/docker-entrypont.sh"]

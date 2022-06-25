@@ -3,11 +3,11 @@ export DEBIAN_FRONTEND=noninteractive
 export PROFILE_CONFIG="$HOME/.profile"
 
 # tooling version
-NODEJS_VERSION=16.15.0
-PYTHON_VERSION=3.10.4
-GOLANG_VERSION=1.18.2
+NODEJS_VERSION=16.15.1
+PYTHON_VERSION=3.10.5
+GOLANG_VERSION=1.18.3
 JAVA_VERSION=adoptopenjdk-14.0.2+12
-FLUTTER_VERSION=3.0.1-stable
+FLUTTER_VERSION=3.0.3-stable
 
 # android cli version
 ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
@@ -85,7 +85,3 @@ sdkmanager --install "platform-tools" "platforms;android-30" "build-tools;32.0.0
 
 # cleanup
 brew cleanup
-
-# prompt for restart the session
-echo ""
-echo "Please restart this terminal session to load the new configuration ..."
