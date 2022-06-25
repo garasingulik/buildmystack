@@ -1,7 +1,7 @@
 FROM ubuntu:jammy
 
 # disable prompt
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 # install required packages
 RUN apt update && apt install -y locales build-essential git curl sudo make jq unzip libssl-dev zlib1g-dev \
@@ -10,7 +10,7 @@ RUN apt update && apt install -y locales build-essential git curl sudo make jq u
   cmake ninja-build libgtk-3-dev
 
 # gilab-runner package
-RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | bash
 RUN apt install gitlab-runner
 
 # install open ssl 1.1.1 for backward compatibility (ubuntu:jammy)
@@ -30,8 +30,7 @@ WORKDIR /home/runner
 USER runner
 
 # copy build script
-ARG TOOLS=base
-COPY build_scripts/build-${TOOLS}.sh build.sh
+COPY build_scripts/build.sh build.sh
 RUN sudo chmod +x build.sh
 
 # run build & clean script
@@ -41,4 +40,4 @@ RUN ./build.sh && rm build.sh
 ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
 # shell
-SHELL ["/bin/bash", "-l"]
+CMD ["/bin/bash", "-l"]
