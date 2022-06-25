@@ -9,6 +9,10 @@ RUN apt update && apt install -y locales build-essential git curl sudo make jq u
   libxmlsec1-dev libffi-dev liblzma-dev apt-transport-https ca-certificates software-properties-common \
   cmake ninja-build libgtk-3-dev
 
+# gilab-runner package
+RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+RUN apt install gitlab-runner
+
 # install open ssl 1.1.1 for backward compatibility (ubuntu:jammy)
 RUN curl -o /tmp/libssl1.1_1.1.0l-1~deb9u6_amd64.deb http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.0l-1~deb9u6_amd64.deb
 RUN apt install -y /tmp/libssl1.1_1.1.0l-1~deb9u6_amd64.deb
