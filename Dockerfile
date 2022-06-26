@@ -40,8 +40,13 @@ RUN sudo chmod +x /usr/bin/docker-entrypoint.sh
 # run build & clean script
 RUN ./build.sh && rm build.sh
 
+# setup gitlab-runner
+RUN sudo gitlab-runner uninstall
+RUN sudo gitlab-runner install --config /etc/gitlab-runner/config.toml --working-directory /home/gitlab-runner --user runner
+
 # set environment variables
 ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
 # shell
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+CMD ["sudo gitlab-runner start && tail -f /dev/null"]
