@@ -12,6 +12,10 @@ FLUTTER_VERSION=3.0.3-stable
 # android cli version
 ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
 
+# sonar scanner
+SONAR_SCANNER_VERSION=4.7.0.2747-linux
+SONAR_SCANNER_CLI=https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION.zip
+
 # helper script to install asdf plugin and set global tooling version
 function tools_install() {
   asdf plugin add $1
@@ -60,13 +64,14 @@ source $PROFILE_CONFIG
 
 # android sdk and cli setup
 export ANDROID_HOME=$HOME/android/sdk
+CLI_TOOLS_OUTPUT=cli-tools.zip
 mkdir -p $ANDROID_HOME
-curl -o cli-tools.zip $ANDROID_CLI
-unzip cli-tools.zip -d $ANDROID_HOME
+curl -o $CLI_TOOLS_OUTPUT $ANDROID_CLI
+unzip $CLI_TOOLS_OUTPUT -d $ANDROID_HOME
 mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/latest
 mkdir -p $ANDROID_HOME/cmdline-tools
 mv $ANDROID_HOME/latest $ANDROID_HOME/cmdline-tools
-rm -f cli-tools.zip
+rm -f $CLI_TOOLS_OUTPUT
 
 # set android home path
 echo "" >> $PROFILE_CONFIG
@@ -82,6 +87,21 @@ source $PROFILE_CONFIG
 # android sdkmanager basic tools installation
 yes | sdkmanager --licenses
 sdkmanager --install "platform-tools" "platforms;android-30" "build-tools;32.0.0"
+
+# sonar-scanner setup
+export SONAR_HOME=$HOME/sonarqube
+SONAR_SCANNER_OUTPUT=sonar-scanner-cli.zip
+mkdir -p $SONAR_HOME
+curl -o $SONAR_SCANNER_OUTPUT $SONAR_SCANNER_CLI
+unzip $SONAR_SCANNER_OUTPUT -d $SONAR_HOME
+mv $SONAR_HOME/sonar-scanner-$SONAR_SCANNER_VERSION $SONAR_HOME/sonar-scanner
+rm -f $SONAR_SCANNER_OUTPUT
+
+# set sonar-scanner path
+echo "" >> $PROFILE_CONFIG
+echo "# sonar" >> $PROFILE_CONFIG
+echo 'export SONAR_HOME=$HOME/sonarqube' >> $PROFILE_CONFIG
+echo 'export PATH=$PATH:$SONAR_HOME/sonar-scanner/bin' >> $PROFILE_CONFIG
 
 # cleanup
 brew cleanup
