@@ -2,6 +2,7 @@ FROM ubuntu:jammy
 
 # disable prompt
 ENV DEBIAN_FRONTEND=noninteractive
+ENV GITHUB_RUNNER_VERSION=linux-x64-2.298.2
 
 # install required packages
 RUN apt update && apt install -y locales build-essential git curl sudo make jq unzip libssl-dev zlib1g-dev \
@@ -28,6 +29,12 @@ RUN useradd -ms /bin/bash runner -p runner
 RUN echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 WORKDIR /home/runner
 USER runner
+
+# github runner
+RUN mkdir -p github/actions-runner && cd github/actions-runner \
+    && curl -O -L "https://github.com/actions/runner/releases/download/v2.298.2/actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
+    && tar xzf "./actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
+    && rm ./"actions-runner-$GITHUB_RUNNER_VERSION.tar.gz"
 
 # copy build script
 COPY build_scripts/build.sh build.sh
