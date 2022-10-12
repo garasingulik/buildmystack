@@ -30,11 +30,14 @@ RUN echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 WORKDIR /home/runner
 USER runner
 
+# set initial git config
+RUN git config --global --add safe.directory /home/gitlab-runner/builds*
+
 # github runner
 RUN mkdir -p github/actions-runner && cd github/actions-runner \
-    && curl -O -L "https://github.com/actions/runner/releases/download/v2.298.2/actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
-    && tar xzf "./actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
-    && rm ./"actions-runner-$GITHUB_RUNNER_VERSION.tar.gz"
+  && curl -O -L "https://github.com/actions/runner/releases/download/v2.298.2/actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
+  && tar xzf "./actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
+  && rm ./"actions-runner-$GITHUB_RUNNER_VERSION.tar.gz"
 
 # copy build script
 COPY build_scripts/build.sh build.sh
