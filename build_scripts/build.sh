@@ -8,6 +8,7 @@ PYTHON_VERSION=3.10.5
 GOLANG_VERSION=1.18.3
 JAVA_VERSION=adoptopenjdk-14.0.2+12
 FLUTTER_VERSION=3.0.3-stable
+TERRAFORM_VERSION=1.3.1
 
 # android cli version
 ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
@@ -56,6 +57,7 @@ tools_install python $PYTHON_VERSION
 tools_install golang $GOLANG_VERSION
 tools_install java $JAVA_VERSION
 tools_install flutter $FLUTTER_VERSION
+tools_install terraform $TERRAFORM_VERSION
 
 # asdf plugin config
 # this will automatically set JAVA_HOME to the preferred version when using asdf-java
