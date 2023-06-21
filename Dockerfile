@@ -15,8 +15,8 @@ RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runn
 RUN apt install gitlab-runner
 
 # install open ssl 1.1.1 for backward compatibility (ubuntu:jammy)
-RUN curl -o /tmp/libssl1.1_1.1.0l-1~deb9u6_amd64.deb http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.0l-1~deb9u6_amd64.deb
-RUN apt install -y /tmp/libssl1.1_1.1.0l-1~deb9u6_amd64.deb
+RUN curl -o /tmp/libssl1.1_1.1.1n-0+deb11u5_amd64.deb http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1n-0+deb11u5_amd64.deb
+RUN apt install -y /tmp/libssl1.1_1.1.1n-0+deb11u5_amd64.deb
 
 # set locale
 RUN localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
