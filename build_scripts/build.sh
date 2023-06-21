@@ -17,7 +17,7 @@ SOPS_VERSION=3.7.3
 ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
 
 # sonar scanner
-SONAR_SCANNER_VERSION=4.7.0.2747-linux
+SONAR_SCANNER_VERSION=4.8.0.2856-linux
 SONAR_SCANNER_CLI=https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION.zip
 
 # helper script to install asdf plugin and set global tooling version
