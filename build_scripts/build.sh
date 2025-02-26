@@ -3,12 +3,12 @@ export DEBIAN_FRONTEND=noninteractive
 export PROFILE_CONFIG="$HOME/.profile"
 
 # tooling version
-NODEJS_VERSION=16.19.0
-PYTHON_VERSION=3.10.9
-GOLANG_VERSION=1.20
+NODEJS_VERSION=22.14.0
+PYTHON_VERSION=3.10.16
+GOLANG_VERSION=1.23.6
 JAVA_VERSION=adoptopenjdk-14.0.2+12
 FLUTTER_VERSION=3.7.1-stable
-TERRAFORM_VERSION=1.3.7
+TERRAFORM_VERSION=1.10.5
 KUBECTL_VERSION=1.26.1
 HELM_VERSION=3.11.0
 SOPS_VERSION=3.7.3
@@ -17,14 +17,14 @@ SOPS_VERSION=3.7.3
 ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
 
 # sonar scanner
-SONAR_SCANNER_VERSION=4.8.0.2856-linux
+SONAR_SCANNER_VERSION=4.8.1.3023-linux
 SONAR_SCANNER_CLI=https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION.zip
 
 # helper script to install asdf plugin and set global tooling version
 function tools_install() {
   asdf plugin add $1
   asdf install $1 $2
-  asdf global $1 $2
+  asdf set -u $1 $2
 }
 
 # set gpg tty
@@ -44,7 +44,8 @@ source $PROFILE_CONFIG
 brew install asdf fastlane awscli terraform ruby
 echo "" >> $PROFILE_CONFIG
 echo "# asdf" >> $PROFILE_CONFIG
-echo ". /home/linuxbrew/.linuxbrew/opt/asdf/libexec/asdf.sh" >> $PROFILE_CONFIG
+# echo ". /home/linuxbrew/.linuxbrew/opt/asdf/libexec/asdf.sh" >> $PROFILE_CONFIG
+echo 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> $PROFILE_CONFIG
 source $PROFILE_CONFIG
 
 # asdf configuration
