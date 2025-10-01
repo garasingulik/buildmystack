@@ -1,8 +1,8 @@
-FROM ubuntu:jammy
+FROM ubuntu:noble
 
 # disable prompt
 ENV DEBIAN_FRONTEND=noninteractive
-ENV GITHUB_RUNNER_VERSION=linux-x64-2.298.2
+ENV GITHUB_RUNNER_VERSION=2.328.0
 
 # install required packages
 RUN apt update && apt install -y locales build-essential git curl sudo make jq unzip libssl-dev zlib1g-dev \
@@ -15,8 +15,9 @@ RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runn
 RUN apt install -y gitlab-runner
 
 # install open ssl 1.1.1 for backward compatibility (ubuntu:jammy)
-RUN curl -o /tmp/libssl1.1_1.1.1w-0+deb11u2_amd64.deb http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0+deb11u2_amd64.deb
-RUN apt install -y /tmp/libssl1.1_1.1.1w-0+deb11u2_amd64.deb
+ENV LIBSSL_PACKAGE=libssl1.1_1.1.1w-0+deb11u3_amd64.deb
+RUN curl -o /tmp/$LIBSSL_PACKAGE http://security.debian.org/debian-security/pool/updates/main/o/openssl/$LIBSSL_PACKAGE
+RUN apt install -y /tmp/$LIBSSL_PACKAGE
 
 # set locale
 RUN localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
@@ -35,9 +36,9 @@ RUN git config --global --add safe.directory /home/gitlab-runner/builds*
 
 # github runner
 RUN mkdir -p github/actions-runner && cd github/actions-runner \
-  && curl -O -L "https://github.com/actions/runner/releases/download/v2.298.2/actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
-  && tar xzf "./actions-runner-$GITHUB_RUNNER_VERSION.tar.gz" \
-  && rm ./"actions-runner-$GITHUB_RUNNER_VERSION.tar.gz"
+  && curl -O -L "https://github.com/actions/runner/releases/download/v$GITHUB_RUNNER_VERSION/actions-runner-linux-x64-$GITHUB_RUNNER_VERSION.tar.gz" \
+  && tar xzf "./actions-runner-linux-x64-$GITHUB_RUNNER_VERSION.tar.gz" \
+  && rm ./"actions-runner-linux-x64-$GITHUB_RUNNER_VERSION.tar.gz"
 
 # copy build script
 COPY build_scripts/build.sh build.sh
