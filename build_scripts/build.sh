@@ -3,21 +3,21 @@ export DEBIAN_FRONTEND=noninteractive
 export PROFILE_CONFIG="$HOME/.profile"
 
 # tooling version
-NODEJS_VERSION=22.14.0
-PYTHON_VERSION=3.10.16
-GOLANG_VERSION=1.23.6
-JAVA_VERSION=adoptopenjdk-14.0.2+12
-FLUTTER_VERSION=3.7.1-stable
-TERRAFORM_VERSION=1.10.5
-KUBECTL_VERSION=1.26.1
-HELM_VERSION=3.11.0
-SOPS_VERSION=3.7.3
+NODEJS_VERSION=22.20.0
+PYTHON_VERSION=3.10.18
+GOLANG_VERSION=1.25.1
+JAVA_VERSION=adoptopenjdk-17.0.16+8
+FLUTTER_VERSION=3.35.5-stable
+TERRAFORM_VERSION=1.13.3
+KUBECTL_VERSION=1.34.1
+HELM_VERSION=3.19.0
+SOPS_VERSION=3.11.0
 
 # android cli version
-ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
+ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
 
 # sonar scanner
-SONAR_SCANNER_VERSION=4.8.1.3023-linux
+SONAR_SCANNER_VERSION=7.2.0.5079-linux-x64
 SONAR_SCANNER_CLI=https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION.zip
 
 # helper script to install asdf plugin and set global tooling version
@@ -44,7 +44,6 @@ source $PROFILE_CONFIG
 brew install asdf fastlane awscli terraform ruby
 echo "" >> $PROFILE_CONFIG
 echo "# asdf" >> $PROFILE_CONFIG
-# echo ". /home/linuxbrew/.linuxbrew/opt/asdf/libexec/asdf.sh" >> $PROFILE_CONFIG
 echo 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> $PROFILE_CONFIG
 source $PROFILE_CONFIG
 
@@ -62,13 +61,14 @@ tools_install golang $GOLANG_VERSION
 tools_install java $JAVA_VERSION
 tools_install flutter $FLUTTER_VERSION
 tools_install terraform $TERRAFORM_VERSION
-tools_install kubectl $FLUTTER_VERSION
-tools_install helm $FLUTTER_VERSION
-tools_install sops $FLUTTER_VERSION
+tools_install kubectl $KUBECTL_VERSION
+tools_install helm $HELM_VERSION
+tools_install sops $SOPS_VERSION
 
 # asdf plugin config
 # this will automatically set JAVA_HOME to the preferred version when using asdf-java
-echo -e ". ~/.asdf/plugins/java/set-java-home.bash" >> $PROFILE_CONFIG
+echo '. ${ASDF_DATA_DIR:-$HOME/.asdf}/plugins/java/set-java-home.bash' >> $PROFILE_CONFIG
+echo '. <(asdf completion bash)' >> $PROFILE_CONFIG
 source $PROFILE_CONFIG
 
 # android sdk and cli setup
