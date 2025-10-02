@@ -10,6 +10,17 @@ RUN apt update && apt install -y locales build-essential git curl sudo make jq u
   libxmlsec1-dev libffi-dev liblzma-dev apt-transport-https ca-certificates software-properties-common \
   cmake ninja-build libgtk-3-dev
 
+# add docker official gpg key
+RUN install -m 0755 -d /etc/apt/keyrings
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+RUN chmod a+r /etc/apt/keyrings/docker.asc
+
+# add the repository to apt sources:
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# install docker
+RUN apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
 # gilab-runner package
 RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | bash
 RUN apt install -y gitlab-runner
@@ -30,6 +41,10 @@ RUN useradd -ms /bin/bash runner -p runner
 RUN echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 WORKDIR /home/runner
 USER runner
+
+# set group
+RUN sudo usermod -aG docker runner
+RUN newgrp docker
 
 # set initial git config
 RUN git config --global --add safe.directory /home/gitlab-runner/builds*
