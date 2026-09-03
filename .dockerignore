@@ -1,0 +1,4 @@
+# Keep the build context minimal — the Dockerfile only COPYs these two files.
+*
+!build_scripts/build.sh
+!docker-entrypoint.sh

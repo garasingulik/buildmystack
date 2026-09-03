@@ -1,6 +1,6 @@
 # Build-My-Stack — Specification
 
-Status: living document · Last updated: 2026-09-03 · Toolchains refreshed to latest stable 2026-09 (§13)
+Status: living document · Last updated: 2026-09-03 · Toolchains refreshed to latest stable + roadmap Phase 1 done, 2026-09 (§10, §13)
 
 This document describes what the `buildmystack` repository produces today, how the
 pieces fit together, the contracts each piece must honour, and the direction for
@@ -54,9 +54,12 @@ assembled at job time.
 | `Dockerfile` | Image definition: base OS, system packages, Docker CE, GitLab Runner, GitHub Actions runner, user model, entrypoint wiring. |
 | `build_scripts/build.sh` | Runs **once at image build time** as the `runner` user. Installs Homebrew, asdf, and every language/CLI toolchain; writes `~/.profile`. |
 | `docker-entrypoint.sh` | Container entrypoint. Dispatches between interactive shell, SonarScanner wrapper, and pass-through exec. |
-| `.gitlab-ci.yml` | Pipeline that builds and pushes the image to the GitLab Container Registry as `:latest` on the default branch. |
-| `.github/workflows/docker-publish.yml` | Workflow that builds and pushes the image to Docker Hub (`feedsbrain/buildmystack`) on a published release. |
-| `README.md` | One-line description. |
+| `.dockerignore` | Trims the build context to just the two COPYed scripts. |
+| `.hadolint.yaml` / `.shellcheckrc` | Lint config (accepted-debt ignore lists). |
+| `.gitlab-ci.yml` | `lint` stage (hadolint + shellcheck, every branch/MR) → `build` stage that pushes the image to the GitLab Container Registry as `:latest` on the default branch. |
+| `.github/workflows/lint.yml` | hadolint + shellcheck on push to `main` and every PR. |
+| `.github/workflows/docker-publish.yml` | Builds and pushes the image to Docker Hub (`feedsbrain/buildmystack`) on a published release. |
+| `README.md` | Usage: what it is, what's inside, how to build and run locally / in CI. |
 | `docs/SPEC.md` | This document. |
 
 ---
@@ -144,14 +147,11 @@ runtimes (notably Python) from source.
 - Installs `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin`,
   `docker-compose-plugin` from Docker's official APT repo (GPG key pinned under
   `/etc/apt/keyrings/docker.asc`).
-- The `runner` user is added to the `docker` group.
+- The `runner` user is added to the `docker` group (`usermod -aG docker runner`).
 - **The Docker daemon is not started by this image.** Intended usage is one of:
   - GitLab CI with a `docker:dind` service and `DOCKER_HOST` pointing at it, or
   - `-v /var/run/docker.sock:/var/run/docker.sock` bind mount, or
   - running the container `--privileged` and starting `dockerd` yourself.
-- `RUN newgrp docker` in the `Dockerfile` is a **no-op** (it spawns a subshell that
-  exits immediately) and is kept only for documentation intent. Group membership
-  takes effect via `usermod -aG docker runner`.
 
 ### 4.4 GitLab Runner
 
@@ -164,10 +164,9 @@ runtimes (notably Python) from source.
 - **Registration is not baked in.** A running container must either mount a
   pre-registered `config.toml` or run `gitlab-runner register` at startup.
 - Note the working directory (`/home/gitlab-runner`) differs from the `runner`
-  user's home (`/home/runner`); the `git config --global --add safe.directory`
-  entry targets `/home/gitlab-runner/builds*` accordingly. The trailing `*` is a
-  literal, not a glob, when passed to `git config`; a broader value such as `'*'`
-  or per-build configuration is preferable (§9).
+  user's home (`/home/runner`) — see §9 #5. The image sets
+  `git config --global --add safe.directory '*'` so the runner can operate on
+  checked-out repos it does not own, wherever they land.
 
 ### 4.5 libssl 1.1 backward compatibility
 
@@ -210,13 +209,17 @@ runtimes (notably Python) from source.
 
 ### 4.8 `build_scripts/build.sh` — toolchain provisioning
 
-Runs once, at image build time, as `runner`. Responsibilities:
+Runs once, at image build time, as `runner`. `set -Eeuo pipefail` with an `ERR`
+trap — any failed step aborts the image build. Responsibilities:
 
-1. **`~/.profile` bootstrap.** Appends blocks for: `GPG_TTY` (so GPG-signed git
-   commits can prompt on a tty), Homebrew `shellenv`, asdf shims on `PATH`,
-   Android SDK paths, SonarScanner on `PATH`. Every interactive/login shell picks
-   these up (entrypoint uses `bash -l`).
-2. **Homebrew/Linuxbrew** install (`NONINTERACTIVE=1`).
+1. **`~/.profile` bootstrap.** Appends blocks (as quoted heredocs) for: `GPG_TTY`
+   (so GPG-signed git commits can prompt on a tty), Homebrew `shellenv`, asdf
+   shims on `PATH`, asdf-java `JAVA_HOME` + completion, Android SDK paths,
+   SonarScanner on `PATH`. A `reload_profile` helper re-sources the file between
+   blocks with `set -e` briefly relaxed (profile sourcing is best-effort). Every
+   interactive/login shell picks these up (entrypoint uses `bash -l`).
+2. **Homebrew/Linuxbrew** install (`NONINTERACTIVE=1`; installer fetched into a
+   variable first so a download failure aborts under `set -e`).
 3. **brew packages:** `asdf`, `fastlane`, `awscli`, `ruby`.
    (Terraform is provided via asdf only — the earlier brew duplicate was removed.)
 4. **asdf config:** `legacy_version_file = yes` in `~/.asdfrc` so a Node project
@@ -249,13 +252,17 @@ Runs once, at image build time, as `runner`. Responsibilities:
 7. **SonarScanner CLI** `8.1.0.6389-linux-x64` unzipped to
    `$SONAR_HOME/sonar-scanner` (`SONAR_HOME=$HOME/sonarqube`), added to `PATH`.
    (8.x bundles a Java 21 JRE.)
-8. `brew cleanup` at the end.
+8. `brew cleanup`.
+9. **Verification block** — runs `--version` (or equivalent) for `node`,
+   `python`, `go`, `java`, `flutter`, `terraform`, `kubectl`, `helm`, `sops`,
+   `sonar-scanner`, `sdkmanager`. With `set -e`, a missing/broken tool fails the
+   build here rather than shipping a broken image.
 
 **Contract for changing versions:** bump the `*_VERSION` variable at the top of
 `build.sh` (or `GITHUB_RUNNER_VERSION` in the `Dockerfile`). Keep the Android API
 level / build-tools in step with the Flutter channel's requirements, and keep
-`JAVA_VERSION` on an LTS the Android Gradle Plugin supports. Run the §8 smoke test
-after any bump.
+`JAVA_VERSION` on an LTS the Android Gradle Plugin supports. The verification
+block (step 9) is the in-build smoke test; §8 covers the external one.
 
 ### 4.9 `docker-entrypoint.sh` — runtime contract
 
@@ -367,21 +374,30 @@ Today these are edited in-file. §10 proposes promoting them to `ARG`s.
 
 ---
 
-## 8. Testing & QA (target)
+## 8. Testing & QA
 
-Currently there are **no automated checks**. Recommended, in rough priority order:
+**In place (Phase 1, 2026-09):**
 
-1. **`hadolint Dockerfile`** and **`shellcheck build_scripts/build.sh
-   docker-entrypoint.sh`** in both pipelines, blocking.
-2. **Post-build smoke test** run against the freshly built image before push:
-   - `bash -lc 'node --version && python --version && go version && java -version && flutter --version && terraform version && kubectl version --client && helm version && sops --version && sonar-scanner --version'`
-   - `bash -lc 'sdkmanager --list_installed'`
-   - `docker-entrypoint.sh` dispatch: no-arg → shell, `sonar-scanner` arg builds
-     expected `-D` flags (assert with a fake `sonar-scanner` on `PATH`), arbitrary
-     arg is exec'd.
-3. **Image size budget** check (fail if it grows > X% between builds).
-4. **Trivy / Grype scan** of the built image; fail on fixable HIGH/CRITICAL.
-5. **`docker buildx build`** for every target platform once multi-arch lands.
+1. ✅ **`hadolint Dockerfile`** and **`shellcheck build_scripts/build.sh
+   docker-entrypoint.sh`** run **blocking** in both pipelines — GitLab
+   (`.gitlab-ci.yml` `lint` stage, on every branch/MR) and GitHub
+   (`.github/workflows/lint.yml`, on push to `main` + every PR). Config:
+   `.hadolint.yaml` (`failure-threshold: info`, with a short `ignored` list of
+   accepted debt) and `.shellcheckrc`.
+2. ✅ **In-build toolchain verification** — `build.sh` ends with a `--version`
+   check of every tool (`node`, `python`, `go`, `java`, `flutter`, `terraform`,
+   `kubectl`, `helm`, `sops`, `sonar-scanner`, `sdkmanager`); with `set -e` a
+   missing/broken tool fails the image build.
+
+**Still target (later phases):**
+
+3. **Post-build smoke test** against the finished image before push — repeat the
+   `--version` sweep from outside, plus assert `docker-entrypoint.sh` dispatch
+   (no-arg → shell; `sonar-scanner` arg → `-D` flags via a fake `sonar-scanner`
+   on `PATH`; arbitrary arg → `exec`).
+4. **Image size budget** check (fail if it grows > X% between builds).
+5. **Trivy / Grype scan** of the built image; fail on fixable HIGH/CRITICAL.
+6. **`docker buildx build`** for every target platform once multi-arch lands.
 
 ---
 
@@ -395,31 +411,37 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 |---|---|---|---|
 | 1 | `libssl1.1` `.deb` and GitHub runner tarball are **amd64/x64 only**. | No arm64 image (Apple Silicon devs, Graviton runners). | Arch-parametrised downloads; for `libssl1.1` select the `arm64` bullseye `.deb` (it is kept by design — §4.5). See §13, §14. |
 | 2 | GitHub workflow `on.release` also lists `branches`/`tags` keys. | Ignored by GitHub for `release` events — misleading, may hide intent. | Remove the invalid keys; gate on `github.event.release.prerelease == false` if needed. |
-| 3 | `RUN newgrp docker` is a no-op. | Dead line. | Delete it. |
-| 4 | `git config --global --add safe.directory /home/gitlab-runner/builds*` — trailing `*` is literal. | Nested build dirs may still trip `detected dubious ownership`. | Use `safe.directory '*'` for a CI builder, or set it per-build in CI. |
+| 3 | ~~`RUN newgrp docker` is a no-op.~~ **Fixed (Phase 1)** — deleted. | — | — |
+| 4 | ~~`safe.directory /home/gitlab-runner/builds*` — trailing `*` is literal.~~ **Fixed (Phase 1)** → `safe.directory '*'`. | — | — |
 | 5 | GitLab Runner working dir `/home/gitlab-runner` ≠ user home `/home/runner`; dir is created implicitly. | Confusing; permissions can drift. | Pick one home, or `mkdir -p` + `chown` explicitly. |
 | 6 | ~~Terraform installed twice (brew **and** asdf).~~ **Fixed 2026-09** — asdf only. | — | — |
-| 7 | Many `RUN` layers in `Dockerfile` (apt key steps, etc.). | Larger image, slower rebuilds. | Merge related `RUN`s; use `--mount=type=cache` for apt/brew. |
-| 8 | No `.dockerignore`. | `.git` and everything else sent as build context. | Add `.dockerignore` (`.git`, `docs`, CI files). |
+| 7 | Many `RUN` layers in `Dockerfile`. **Partly addressed (Phase 1)** — apt steps merged with their `rm -rf /var/lib/apt/lists/*`. | Still ~20 layers; larger image, slower rebuilds. | Merge the remaining key/repo `RUN`s; use `--mount=type=cache`. `DL3059` is ignored in `.hadolint.yaml` until then. |
+| 8 | ~~No `.dockerignore`.~~ **Fixed (Phase 1)** — context is now just the two COPYed scripts. | — | — |
 | 9 | ~~Android `platforms;android-30` / `build-tools;32.0.0` years behind.~~ **Fixed 2026-09** → API 36 / `build-tools;36.0.0`. | — | Still not parametrised by `ARG`; keep in step with the Flutter channel on each bump. See §13. |
 | 10 | Neither runner is registerable without extra scripting. | Every consumer re-invents startup. | Ship `bin/register-gitlab.sh` / `bin/register-github.sh` helpers. |
 | 11 | Secrets (`SONAR_LOGIN`) passed as env and expanded into a process arg list. | Visible in `ps` inside the container. | Prefer `SONAR_TOKEN` via `sonar-scanner` native env, or a properties file. |
-| 12 | `build.sh` has no `set -euo pipefail`. | A failed tool install can pass silently and ship a broken image. | Add `set -Eeuo pipefail` and a post-install verification block. |
+| 12 | ~~`build.sh` has no `set -euo pipefail`.~~ **Fixed (Phase 1)** — `set -Eeuo pipefail` + `ERR` trap + end-of-run `--version` verification. | — | — |
 | 13 | Downloads are unpinned by checksum (Homebrew installer, Android tools, Sonar, runner). | Supply-chain risk; non-reproducible. | Pin SHA256 for every `curl`ed artifact and verify before use. |
 | 14 | `:latest`-only publishing from GitLab CI. | Consumers cannot pin; rollbacks are manual. | Add immutable tags (§7). |
-| 15 | No healthcheck / no `LABEL org.opencontainers.image.*`. | Poor provenance and observability. | Add OCI labels (source, revision, created) and a lightweight `HEALTHCHECK` where it makes sense. |
+| 15 | ~~No `LABEL org.opencontainers.image.*`.~~ **Fixed (Phase 1)** — OCI labels added; `VCS_REF`/`BUILD_DATE` passed by both pipelines. | Still no `HEALTHCHECK`. | Add a lightweight `HEALTHCHECK` where it makes sense. |
 | 16 | Single giant image serves every stack. | ~multi-GB pull for a job that only needs Node. | Consider a `core` base + stack-specific tags (`-android`, `-flutter`, `-infra`) built via multi-stage / build targets. |
 
 ---
 
 ## 10. Roadmap for future development
 
-### Phase 1 — Hygiene (low risk, high leverage)
-- Add `.dockerignore`.
-- Add `hadolint` + `shellcheck` to CI (blocking).
-- `set -Eeuo pipefail` in `build.sh` + post-install `--version` verification block.
-- Remove dead lines (#3), fix `safe.directory` (#4). *(Terraform de-dup #6 done 2026-09.)*
-- Add OCI image labels with source/revision/build-date.
+### Phase 1 — Hygiene — **done 2026-09**
+- ✅ `.dockerignore` — build context is now only the two COPYed scripts.
+- ✅ `hadolint` + `shellcheck` run **blocking** in GitLab and GitHub CI
+  (`.hadolint.yaml`, `.shellcheckrc`, `.github/workflows/lint.yml`).
+- ✅ `build.sh`: `set -Eeuo pipefail` + `ERR` trap + end-of-run `--version`
+  verification of every tool; profile writes converted to heredocs.
+- ✅ Removed `RUN newgrp docker` (#3); `safe.directory '*'` (#4);
+  `apt` → `apt-get` + per-layer apt-list cleanup; `COPY --chmod` instead of
+  `sudo chmod`; `cd` in the runner download replaced with `tar -C`.
+- ✅ OCI `LABEL`s (title, description, source, documentation, revision, created);
+  `VCS_REF` / `BUILD_DATE` build-args wired into both pipelines.
+- Not done (deferred): full `RUN`-layer consolidation (#7) and `HEALTHCHECK` (#15).
 
 ### Phase 2 — Reproducibility & release quality
 - Promote every version to a `Dockerfile` `ARG` (defaulted), forwarded into
@@ -521,7 +543,7 @@ All language/CLI toolchains were moved to the latest stable upstream release on
 | Flutter | `3.47.2-stable` (Dart 3.13.2) | 🟢 current | Drives the Android SDK + JDK minimums. |
 | Terraform | `1.16.1` | 🟢 current, ⚠️ license | **BSL-licensed since 1.6.** If the licence is a problem, swap the asdf plugin for **OpenTofu** (`opentofu`, MPL, still drop-in). |
 | kubectl | `1.37.0` | 🟢 current | Keep within ±1 minor of the clusters you target. |
-| Helm | `4.2.4` | 🟠 **major bump — verify** | Moved from Helm 3 to **Helm 4**. Re-test chart installs, `helm` plugins, and any `helm template` output diffs before relying on it in prod pipelines. Helm 3 is EOL. |
+| Helm | `4.2.4` | 🟢 current major (**Helm 4**) | `4.2.4` is the latest stable (4.3.0 is only `-rc.1` as of 2026-09). Committed to the Helm 4 major line — Helm 3 is EOL. Consumers whose charts/plugins are not yet Helm 4-ready should pin an older image tag or add a `helm@3` asdf entry per-repo; re-test `helm template` output diffs when adopting. |
 | SonarScanner CLI | `8.1.0.6389` | 🟢 current | 8.x bundles a Java 21 JRE; also ships a `linux-aarch64` build (useful for §14). |
 | SOPS | `3.13.3` | 🟢 current | — |
 | Android cmdline-tools | rev `15859902` | 🟢 current | Bump the URL alongside the platform. |
@@ -542,7 +564,6 @@ All language/CLI toolchains were moved to the latest stable upstream release on
 
 ### 13.1a Still outstanding (not version bumps)
 
-- **`RUN newgrp docker`** — no-op, delete.
 - **Redundant Ruby** — `fastlane` pulls its own Ruby; the extra brew `ruby` is
   probably removable (verify nothing calls `ruby` directly first).
 - **GitHub workflow `on.release.branches` / `tags` keys** — invalid for the

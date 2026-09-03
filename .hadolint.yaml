@@ -1,0 +1,14 @@
+# hadolint config - https://github.com/hadolint/hadolint
+# Rationale for each ignored rule is in docs/SPEC.md section 4.6 and section 9.
+failure-threshold: info
+ignored:
+  # sudo in RUN: this image deliberately grants `runner` passwordless sudo.
+  - DL3004
+  # pin apt versions: this is a rolling latest-toolchain image.
+  - DL3008
+  # --no-install-recommends: the image intentionally wants a fat environment.
+  - DL3015
+  # consecutive RUN layers: consolidation is tracked separately.
+  - DL3059
+  # non-numeric UID for runner: intentional.
+  - DL3066

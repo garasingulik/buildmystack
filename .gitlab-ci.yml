@@ -1,3 +1,25 @@
+stages:
+  - lint
+  - build
+
+hadolint:
+  stage: lint
+  image: hadolint/hadolint:latest-debian
+  script:
+    - hadolint Dockerfile
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+shellcheck:
+  stage: lint
+  image: koalaman/shellcheck-alpine:stable
+  script:
+    - shellcheck build_scripts/build.sh docker-entrypoint.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
 docker-build:
   image: docker:latest
   stage: build
@@ -11,5 +33,9 @@ docker-build:
     - |
       tag=":latest"
       echo "Running on default branch '$CI_DEFAULT_BRANCH': tag = 'latest'"
-    - docker build --pull -t "$CI_REGISTRY_IMAGE${tag}" .
+    - >
+      docker build --pull
+      --build-arg VCS_REF="$CI_COMMIT_SHORT_SHA"
+      --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      -t "$CI_REGISTRY_IMAGE${tag}" .
     - docker push "$CI_REGISTRY_IMAGE${tag}"

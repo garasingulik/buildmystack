@@ -1,0 +1,6 @@
+# shellcheck config — https://www.shellcheck.net
+#
+# The build script sources the user's ~/.profile, which shellcheck cannot follow
+# at lint time. That is expected, so silence the "can't follow source" checks.
+disable=SC1090,SC1091
+external-sources=false

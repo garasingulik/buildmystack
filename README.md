@@ -44,8 +44,10 @@ and in `ENV` lines in the [`Dockerfile`](Dockerfile). See
 > **Notes on the current defaults:**
 > - **Java stays on Temurin 21** (latest LTS the Android Gradle Plugin / Flutter
 >   support), not 25 — see [`docs/SPEC.md` §13](docs/SPEC.md#13-toolchain-currency-audit).
-> - **Helm is now v4** (was v3) — re-test chart installs before prod pipelines
->   rely on it.
+> - **Helm is the v4 major line** (`4.2.4`, the latest stable; Helm 3 is EOL). If
+>   your charts/plugins are not Helm 4-ready yet, pin an older image tag or add a
+>   per-repo `helm 3.x` `.tool-versions` entry, and diff `helm template` output
+>   when you adopt.
 > - **Terraform 1.16 is BSL-licensed**; swap the asdf plugin for OpenTofu if that
 >   matters to you.
 > - `libssl1.1` (`libssl.so.1.1`) is kept on purpose for backward compatibility
@@ -76,7 +78,8 @@ docker pull feedsbrain/buildmystack:latest
 
 ### Prerequisites
 
-- Docker 20.10+ (Buildx recommended).
+- **Docker with BuildKit** (default in Docker 23+). The `Dockerfile` uses
+  `COPY --chmod`, which needs BuildKit — a `DOCKER_BUILDKIT=0` build will fail.
 - ~15–20 GB free disk and a good connection — the build compiles Python from
   source and downloads Android + Flutter + JDK + Homebrew. Expect **10–30 min**
   cold and a multi-GB image.
@@ -87,10 +90,18 @@ docker pull feedsbrain/buildmystack:latest
 git clone git@github.com:garasingulik/buildmystack.git
 cd buildmystack
 
-docker build -t buildmystack:local .
+docker build \
+  --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
+  --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -t buildmystack:local .
 ```
 
-### With Buildx (recommended)
+The two `--build-arg`s are optional — they only populate the
+`org.opencontainers.image.revision` / `.created` labels (both pipelines pass
+them). Tool versions are edited in-file, see
+[Updating tool versions](#updating-tool-versions).
+
+### With Buildx
 
 ```sh
 docker buildx build --load -t buildmystack:local .
@@ -98,12 +109,18 @@ docker buildx build --load -t buildmystack:local .
 
 ### Notes
 
-- The build has no required build args today; tool versions are edited in-file
-  (see [Updating tool versions](#updating-tool-versions)).
-- Most of [`build_scripts/build.sh`](build_scripts/build.sh) runs as the `runner`
-  user during a single `RUN` layer. If it fails partway, fix and rebuild — layer
-  caching keeps earlier steps.
-- Do a quick smoke check after building:
+- `build.sh` runs `set -Eeuo pipefail` and ends with a `--version` check of every
+  tool, so a broken toolchain fails the build instead of shipping.
+- If the build fails partway, fix and rebuild — layer caching keeps earlier steps.
+- Lint the sources the way CI does (both are blocking in CI):
+
+  ```sh
+  docker run --rm -v "$PWD":/repo -w /repo hadolint/hadolint hadolint Dockerfile
+  docker run --rm -v "$PWD":/repo -w /repo koalaman/shellcheck-alpine:stable \
+    shellcheck build_scripts/build.sh docker-entrypoint.sh
+  ```
+
+- Re-run the in-build smoke check against the finished image:
 
   ```sh
   docker run --rm buildmystack:local bash -lc '
@@ -319,12 +336,17 @@ The full currency audit and bump cadence live in
 
 ---
 
-## How this image is published
+## CI / publishing
 
 | Pipeline | Trigger | Result |
 |---|---|---|
-| [`.gitlab-ci.yml`](.gitlab-ci.yml) | push to the default branch | `docker build` + push `$CI_REGISTRY_IMAGE:latest` (uses `docker:dind`). |
+| [`.gitlab-ci.yml`](.gitlab-ci.yml) `lint` stage | every branch / MR | **blocking** `hadolint Dockerfile` + `shellcheck` of the scripts. |
+| [`.github/workflows/lint.yml`](.github/workflows/lint.yml) | push to `main`, every PR | same two **blocking** linters. |
+| [`.gitlab-ci.yml`](.gitlab-ci.yml) `build` stage | push to the default branch | `docker build` (with `VCS_REF` / `BUILD_DATE` args) + push `$CI_REGISTRY_IMAGE:latest` via `docker:dind`. |
 | [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) | GitHub **release published** | build + push `feedsbrain/buildmystack:latest` and `:<version>` to Docker Hub (`DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets). |
+
+Lint config: [`.hadolint.yaml`](.hadolint.yaml) (`failure-threshold: info` with a
+short `ignored` list of accepted debt) and [`.shellcheckrc`](.shellcheckrc).
 
 ---
 
@@ -332,9 +354,12 @@ The full currency audit and bump cadence live in
 
 | Path | Role |
 |---|---|
-| `Dockerfile` | Image definition: base OS, system packages, Docker CE, GitLab Runner, GitHub Actions runner, user model, entrypoint wiring. |
-| `build_scripts/build.sh` | Runs once at build time as `runner`: Homebrew, asdf, all language/CLI toolchains, Android SDK, SonarScanner; writes `~/.profile`. |
+| `Dockerfile` | Image definition: base OS, system packages, Docker CE, GitLab Runner, GitHub Actions runner, user model, OCI labels, entrypoint wiring. |
+| `build_scripts/build.sh` | Runs once at build time as `runner` (`set -Eeuo pipefail`): Homebrew, asdf, all language/CLI toolchains, Android SDK, SonarScanner; writes `~/.profile`; verifies every tool at the end. |
 | `docker-entrypoint.sh` | Entrypoint: dispatches between login shell, `sonar-scanner` wrapper, and pass-through `exec`. |
-| `.gitlab-ci.yml` | Builds & pushes the image to the GitLab registry. |
+| `.dockerignore` | Keeps the build context to the two COPYed scripts. |
+| `.hadolint.yaml` / `.shellcheckrc` | Lint config. |
+| `.gitlab-ci.yml` | Lint + build/push to the GitLab registry. |
+| `.github/workflows/lint.yml` | hadolint + shellcheck. |
 | `.github/workflows/docker-publish.yml` | Builds & pushes the image to Docker Hub on release. |
 | `docs/SPEC.md` | Full specification, contracts, known issues, roadmap. |

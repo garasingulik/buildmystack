@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+# Provisions the polyglot toolchain into the image. Runs once, at image build
+# time, as the `runner` user. Any failure aborts the build (set -e).
+set -Eeuo pipefail
+trap 'echo "build.sh: failed at line $LINENO" >&2' ERR
+
 export DEBIAN_FRONTEND=noninteractive
 export PROFILE_CONFIG="$HOME/.profile"
 
@@ -26,98 +32,137 @@ ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-1585
 SONAR_SCANNER_VERSION=8.1.0.6389-linux-x64
 SONAR_SCANNER_CLI=https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION.zip
 
-# helper script to install asdf plugin and set global tooling version
-function tools_install() {
-  asdf plugin add $1
-  asdf install $1 $2
-  asdf set -u $1 $2
+# helper: install an asdf plugin and set it as the global version
+tools_install() {
+  asdf plugin add "$1" || true
+  asdf install "$1" "$2"
+  asdf set -u "$1" "$2"
+}
+
+# helper: re-load ~/.profile. Sourcing a profile is best-effort (completion/eval
+# lines may exit non-zero or touch unset vars), so relax -e/-u around it. The
+# end-of-script verification block is the real safety net.
+reload_profile() {
+  set +eu
+  # shellcheck source=/dev/null
+  source "$PROFILE_CONFIG"
+  set -eu
 }
 
 # set gpg tty
-# if we sign git commit using gpg, this configuration will redirect password prompt to tty
-echo "" >> $PROFILE_CONFIG
-echo "# gpg" >> $PROFILE_CONFIG
-echo 'export GPG_TTY=$(tty)' >> $PROFILE_CONFIG
+# if we sign git commits with gpg, this redirects the passphrase prompt to the tty
+cat >> "$PROFILE_CONFIG" <<'EOF'
+
+# gpg
+export GPG_TTY=$(tty)
+EOF
 
 # install homebrew / linuxbrew (yeah that's right, homebrew is not only for macOS)
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-echo "" >> $PROFILE_CONFIG
-echo "# homebrew" >> $PROFILE_CONFIG
-echo 'eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv)' >> $PROFILE_CONFIG
-source $PROFILE_CONFIG
+brew_installer="$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+NONINTERACTIVE=1 /bin/bash -c "$brew_installer"
+cat >> "$PROFILE_CONFIG" <<'EOF'
 
-# install asdf-vm, this make our life easier if we use multiple tooling
+# homebrew
+eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+EOF
+reload_profile
+
+# install asdf-vm, this makes life easier when juggling multiple toolchains
 # note: terraform is provided via asdf (pinned above); do not add it here too
 brew install asdf fastlane awscli ruby
-echo "" >> $PROFILE_CONFIG
-echo "# asdf" >> $PROFILE_CONFIG
-echo 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> $PROFILE_CONFIG
-source $PROFILE_CONFIG
+cat >> "$PROFILE_CONFIG" <<'EOF'
+
+# asdf
+export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
+EOF
+reload_profile
 
 # asdf configuration
 #
-# this specific configuration is to make asdf compatible with nvm
-# so when the Node.js project has .nvmrc, asdf will honor this file
-# if .tool-versions is not found
+# `legacy_version_file` makes asdf honour a Node project's .nvmrc when no
+# .tool-versions is present (nvm compatibility).
 echo "legacy_version_file = yes" >> ~/.asdfrc
 
 # actually install the tooling
-tools_install nodejs $NODEJS_VERSION
-tools_install python $PYTHON_VERSION
-tools_install golang $GOLANG_VERSION
-tools_install java $JAVA_VERSION
-tools_install flutter $FLUTTER_VERSION
-tools_install terraform $TERRAFORM_VERSION
-tools_install kubectl $KUBECTL_VERSION
-tools_install helm $HELM_VERSION
-tools_install sops $SOPS_VERSION
+tools_install nodejs "$NODEJS_VERSION"
+tools_install python "$PYTHON_VERSION"
+tools_install golang "$GOLANG_VERSION"
+tools_install java "$JAVA_VERSION"
+tools_install flutter "$FLUTTER_VERSION"
+tools_install terraform "$TERRAFORM_VERSION"
+tools_install kubectl "$KUBECTL_VERSION"
+tools_install helm "$HELM_VERSION"
+tools_install sops "$SOPS_VERSION"
 
 # asdf plugin config
-# this will automatically set JAVA_HOME to the preferred version when using asdf-java
-echo '. ${ASDF_DATA_DIR:-$HOME/.asdf}/plugins/java/set-java-home.bash' >> $PROFILE_CONFIG
-echo '. <(asdf completion bash)' >> $PROFILE_CONFIG
-source $PROFILE_CONFIG
+# set-java-home.bash keeps JAVA_HOME pointed at the active asdf Java
+cat >> "$PROFILE_CONFIG" <<'EOF'
+. ${ASDF_DATA_DIR:-$HOME/.asdf}/plugins/java/set-java-home.bash
+. <(asdf completion bash)
+EOF
+reload_profile
 
 # android sdk and cli setup
-export ANDROID_HOME=$HOME/android/sdk
+export ANDROID_HOME="$HOME/android/sdk"
 CLI_TOOLS_OUTPUT=cli-tools.zip
-mkdir -p $ANDROID_HOME
-curl -o $CLI_TOOLS_OUTPUT $ANDROID_CLI
-unzip $CLI_TOOLS_OUTPUT -d $ANDROID_HOME
-mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/latest
-mkdir -p $ANDROID_HOME/cmdline-tools
-mv $ANDROID_HOME/latest $ANDROID_HOME/cmdline-tools
-rm -f $CLI_TOOLS_OUTPUT
+mkdir -p "$ANDROID_HOME"
+curl -fsSL -o "$CLI_TOOLS_OUTPUT" "$ANDROID_CLI"
+unzip -q "$CLI_TOOLS_OUTPUT" -d "$ANDROID_HOME"
+mv "$ANDROID_HOME/cmdline-tools" "$ANDROID_HOME/latest"
+mkdir -p "$ANDROID_HOME/cmdline-tools"
+mv "$ANDROID_HOME/latest" "$ANDROID_HOME/cmdline-tools"
+rm -f "$CLI_TOOLS_OUTPUT"
 
 # set android home path
-echo "" >> $PROFILE_CONFIG
-echo "# android" >> $PROFILE_CONFIG
-echo 'export ANDROID_HOME=$HOME/android/sdk' >> $PROFILE_CONFIG
-echo 'export PATH=$PATH:$ANDROID_HOME/emulator' >> $PROFILE_CONFIG
-echo 'export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest' >> $PROFILE_CONFIG
-echo 'export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin' >> $PROFILE_CONFIG
-echo 'export PATH=$PATH:$ANDROID_HOME/platform-tools' >> $PROFILE_CONFIG
-echo 'export ANDROID_SDK_ROOT=$ANDROID_HOME' >> $PROFILE_CONFIG
-source $PROFILE_CONFIG
+cat >> "$PROFILE_CONFIG" <<'EOF'
+
+# android
+export ANDROID_HOME=$HOME/android/sdk
+export PATH=$PATH:$ANDROID_HOME/emulator
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export ANDROID_SDK_ROOT=$ANDROID_HOME
+EOF
+reload_profile
 
 # android sdkmanager basic tools installation
-yes | sdkmanager --licenses
+# `yes` is killed by SIGPIPE once sdkmanager stops reading — that is expected.
+yes | sdkmanager --licenses || true
 sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
 # sonar-scanner setup
-export SONAR_HOME=$HOME/sonarqube
+export SONAR_HOME="$HOME/sonarqube"
 SONAR_SCANNER_OUTPUT=sonar-scanner-cli.zip
-mkdir -p $SONAR_HOME
-curl -o $SONAR_SCANNER_OUTPUT $SONAR_SCANNER_CLI
-unzip $SONAR_SCANNER_OUTPUT -d $SONAR_HOME
-mv $SONAR_HOME/sonar-scanner-$SONAR_SCANNER_VERSION $SONAR_HOME/sonar-scanner
-rm -f $SONAR_SCANNER_OUTPUT
+mkdir -p "$SONAR_HOME"
+curl -fsSL -o "$SONAR_SCANNER_OUTPUT" "$SONAR_SCANNER_CLI"
+unzip -q "$SONAR_SCANNER_OUTPUT" -d "$SONAR_HOME"
+mv "$SONAR_HOME/sonar-scanner-$SONAR_SCANNER_VERSION" "$SONAR_HOME/sonar-scanner"
+rm -f "$SONAR_SCANNER_OUTPUT"
 
 # set sonar-scanner path
-echo "" >> $PROFILE_CONFIG
-echo "# sonar" >> $PROFILE_CONFIG
-echo 'export SONAR_HOME=$HOME/sonarqube' >> $PROFILE_CONFIG
-echo 'export PATH=$PATH:$SONAR_HOME/sonar-scanner/bin' >> $PROFILE_CONFIG
+cat >> "$PROFILE_CONFIG" <<'EOF'
+
+# sonar
+export SONAR_HOME=$HOME/sonarqube
+export PATH=$PATH:$SONAR_HOME/sonar-scanner/bin
+EOF
+reload_profile
 
 # cleanup
 brew cleanup
+
+# verify every toolchain resolves — fail the build if one does not
+echo "==> verifying installed toolchain"
+node --version
+python --version
+go version
+java -version
+flutter --version
+terraform version
+kubectl version --client
+helm version
+sops --version
+sonar-scanner --version
+sdkmanager --version
+echo "==> toolchain OK"
