@@ -3,21 +3,27 @@ export DEBIAN_FRONTEND=noninteractive
 export PROFILE_CONFIG="$HOME/.profile"
 
 # tooling version
-NODEJS_VERSION=22.20.0
-PYTHON_VERSION=3.10.18
-GOLANG_VERSION=1.25.1
-JAVA_VERSION=adoptopenjdk-17.0.16+8
-FLUTTER_VERSION=3.35.5-stable
-TERRAFORM_VERSION=1.13.3
-KUBECTL_VERSION=1.34.1
-HELM_VERSION=3.19.0
-SOPS_VERSION=3.11.0
+#
+# Bump policy: keep these at the latest stable upstream release. Node.js tracks
+# the active LTS line (not "Current"). Java stays on the latest LTS that the
+# Android Gradle Plugin / Flutter toolchain officially supports (currently 21);
+# Temurin 25 exists but is not yet safe as the shared default for Android builds.
+# Verify a JDK id against: asdf list all java 'temurin-'
+NODEJS_VERSION=24.20.0
+PYTHON_VERSION=3.14.7
+GOLANG_VERSION=1.27.1
+JAVA_VERSION=temurin-21.0.12+101.0.LTS
+FLUTTER_VERSION=3.47.2-stable
+TERRAFORM_VERSION=1.16.1
+KUBECTL_VERSION=1.37.0
+HELM_VERSION=4.2.4
+SOPS_VERSION=3.13.3
 
 # android cli version
-ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+ANDROID_CLI=https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
 
 # sonar scanner
-SONAR_SCANNER_VERSION=7.2.0.5079-linux-x64
+SONAR_SCANNER_VERSION=8.1.0.6389-linux-x64
 SONAR_SCANNER_CLI=https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION.zip
 
 # helper script to install asdf plugin and set global tooling version
@@ -41,7 +47,8 @@ echo 'eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv)' >> $PROFILE_CONFIG
 source $PROFILE_CONFIG
 
 # install asdf-vm, this make our life easier if we use multiple tooling
-brew install asdf fastlane awscli terraform ruby
+# note: terraform is provided via asdf (pinned above); do not add it here too
+brew install asdf fastlane awscli ruby
 echo "" >> $PROFILE_CONFIG
 echo "# asdf" >> $PROFILE_CONFIG
 echo 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> $PROFILE_CONFIG
@@ -95,7 +102,7 @@ source $PROFILE_CONFIG
 
 # android sdkmanager basic tools installation
 yes | sdkmanager --licenses
-sdkmanager --install "platform-tools" "platforms;android-30" "build-tools;32.0.0"
+sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
 # sonar-scanner setup
 export SONAR_HOME=$HOME/sonarqube

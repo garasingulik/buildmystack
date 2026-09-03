@@ -23,25 +23,34 @@ Base: `ubuntu:noble` (24.04 LTS). Non-root user `runner` (passwordless `sudo`,
 member of the `docker` group). All tools are on `PATH` in a **login shell**
 (`bash -l`), which the entrypoint always uses.
 
+Versions below are the current defaults (latest stable upstream as of the
+2026-09 refresh).
+
 | Category | Tools |
 |---|---|
-| Languages / runtimes (via [asdf](https://asdf-vm.com)) | Node.js `22.20.0`, Python `3.10.18`, Go `1.25.1`, Java `adoptopenjdk-17.0.16+8`, Flutter `3.35.5-stable` |
-| Infra / cloud (via asdf) | Terraform `1.13.3`, kubectl `1.34.1`, Helm `3.19.0`, SOPS `3.11.0` |
-| Infra / cloud (via Homebrew) | AWS CLI, Terraform, Ruby, Fastlane |
-| Mobile | Android SDK cmdline-tools, `platform-tools`, `platforms;android-30`, `build-tools;32.0.0` (`ANDROID_HOME=/home/runner/android/sdk`) |
-| Code quality | SonarScanner CLI `7.2.0` (`sonar-scanner` on `PATH`) |
+| Languages / runtimes (via [asdf](https://asdf-vm.com)) | Node.js `24.20.0` (LTS), Python `3.14.7`, Go `1.27.1`, Java `temurin-21.0.12+101.0.LTS`, Flutter `3.47.2-stable` (Dart 3.13.2) |
+| Infra / cloud (via asdf) | Terraform `1.16.1`, kubectl `1.37.0`, Helm `4.2.4`, SOPS `3.13.3` |
+| Infra / cloud (via Homebrew) | AWS CLI, Ruby, Fastlane |
+| Mobile | Android SDK cmdline-tools `15859902`, `platform-tools`, `platforms;android-36`, `build-tools;36.0.0` (`ANDROID_HOME=/home/runner/android/sdk`) |
+| Code quality | SonarScanner CLI `8.1.0.6389` (`sonar-scanner` on `PATH`) |
 | Containers | Docker CE + CLI, Buildx, Compose plugin (daemon **not** started — see below) |
-| CI runners | `gitlab-runner` (installed as a service), GitHub Actions runner `2.328.0` at `/home/runner/github/actions-runner` |
+| CI runners | `gitlab-runner` (installed as a service), GitHub Actions runner `2.337.0` at `/home/runner/github/actions-runner` |
 | Build essentials | `build-essential`, `git`, `curl`, `wget`, `make`, `cmake`, `ninja-build`, `jq`, `unzip`, `llvm`, Python build headers, `libgtk-3-dev` (Flutter Linux), `libssl1.1` (legacy binary compat) |
 
 Exact versions live at the top of [`build_scripts/build.sh`](build_scripts/build.sh)
 and in `ENV` lines in the [`Dockerfile`](Dockerfile). See
 [Updating tool versions](#updating-tool-versions).
 
-> **Toolchain currency:** several pinned versions are behind or near end-of-life
-> (Python 3.10, the GitHub Actions runner, Android API 30, Java 17, Helm 3, …).
-> See [`docs/SPEC.md` §13](docs/SPEC.md#13-toolchain-currency-audit-as-of-2026-09)
-> for the full audit and priorities.
+> **Notes on the current defaults:**
+> - **Java stays on Temurin 21** (latest LTS the Android Gradle Plugin / Flutter
+>   support), not 25 — see [`docs/SPEC.md` §13](docs/SPEC.md#13-toolchain-currency-audit).
+> - **Helm is now v4** (was v3) — re-test chart installs before prod pipelines
+>   rely on it.
+> - **Terraform 1.16 is BSL-licensed**; swap the asdf plugin for OpenTofu if that
+>   matters to you.
+> - `libssl1.1` (`libssl.so.1.1`) is kept on purpose for backward compatibility
+>   with binaries that still link OpenSSL 1.1, pinned to the newest Debian 11 LTS
+>   backport (`deb11u8`). It is amd64-only.
 
 > **Architecture:** currently **amd64 / x86-64 only** (the bundled `libssl1.1`
 > `.deb`, the GitHub runner tarball, and the Android SDK are amd64). Multi-arch
@@ -294,11 +303,19 @@ repo to pin any tool per-project.
 1. Edit the `*_VERSION` variables at the top of
    [`build_scripts/build.sh`](build_scripts/build.sh) (languages, infra tools,
    Android CLI, SonarScanner) and/or the `ENV` lines in the
-   [`Dockerfile`](Dockerfile) (`GITHUB_RUNNER_VERSION`, `LIBSSL_PACKAGE`).
-2. Keep the Android API level / build-tools roughly in step with the Flutter
-   version.
-3. Rebuild and run the smoke check above.
-4. Commit; the release pipeline publishes a new tag.
+   [`Dockerfile`](Dockerfile) (`GITHUB_RUNNER_VERSION`; `LIBSSL_PACKAGE` — set to
+   the newest `libssl1.1_1.1.1w-0+deb11u*_amd64.deb` in the
+   [debian-security OpenSSL pool](http://security.debian.org/debian-security/pool/updates/main/o/openssl/)).
+2. Keep the Android API level / build-tools in step with the Flutter version, and
+   keep `JAVA_VERSION` on an LTS the Android Gradle Plugin supports. Verify a JDK
+   id with `asdf list all java 'temurin-'`.
+3. Bump `GITHUB_RUNNER_VERSION` roughly monthly — GitHub enforces a rolling
+   minimum for self-hosted runners.
+4. Rebuild and run the smoke check above.
+5. Commit; the release pipeline publishes a new tag.
+
+The full currency audit and bump cadence live in
+[`docs/SPEC.md` §13](docs/SPEC.md#13-toolchain-currency-audit).
 
 ---
 

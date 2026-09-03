@@ -1,6 +1,6 @@
 # Build-My-Stack — Specification
 
-Status: living document · Last updated: 2026-09-03 · Toolchain audit: §13 (2026-09)
+Status: living document · Last updated: 2026-09-03 · Toolchains refreshed to latest stable 2026-09 (§13)
 
 This document describes what the `buildmystack` repository produces today, how the
 pieces fit together, the contracts each piece must honour, and the direction for
@@ -85,13 +85,13 @@ assembled at job time.
              ▼
    build_scripts/build.sh  (as user `runner`, at build time)
    ├─ Homebrew/Linuxbrew            → /home/linuxbrew/.linuxbrew
-   ├─ brew: asdf, fastlane, awscli, terraform, ruby
+   ├─ brew: asdf, fastlane, awscli, ruby
    ├─ asdf plugins + pinned versions:
    │     nodejs, python, golang, java, flutter,
    │     terraform, kubectl, helm, sops
    ├─ Android SDK cmdline-tools + platform-tools,
-   │     platforms;android-30, build-tools;32.0.0
-   ├─ SonarScanner CLI 7.2.0
+   │     platforms;android-36, build-tools;36.0.0
+   ├─ SonarScanner CLI 8.1
    └─ writes ~/.profile (GPG_TTY, brew, asdf, android, sonar on PATH)
 ```
 
@@ -171,11 +171,21 @@ runtimes (notably Python) from source.
 
 ### 4.5 libssl 1.1 backward compatibility
 
-- `libssl1.1_1.1.1w-0+deb11u3_amd64.deb` is fetched from Debian security and
-  installed so that older prebuilt binaries (some Android/Gradle/Node native
-  tooling, older Sonar plugins) that link `libssl.so.1.1` keep working on Ubuntu
-  24.04, which ships OpenSSL 3.
-- This `.deb` is **amd64-specific** and is the main blocker for arm64 images.
+- **Deliberately retained.** Ubuntu 24.04 (`noble`) ships only OpenSSL 3
+  (`libssl.so.3`); some prebuilt binaries and tooling still link
+  `libssl.so.1.1` (older Android/Gradle native components, some Node native
+  modules, older Sonar plugins). Installing the runtime lib keeps those working
+  without rebuilding them.
+- Sourced as a Debian **11 (bullseye) LTS** `.deb` from the `debian-security`
+  pool. OpenSSL 1.1.1 upstream ended at `1.1.1w`; bullseye LTS keeps backporting
+  CVE fixes as `deb11uN`. The `Dockerfile` pins the **newest available**
+  (`LIBSSL_PACKAGE=libssl1.1_1.1.1w-0+deb11u8_amd64.deb`). Bump `LIBSSL_PACKAGE`
+  whenever a higher `deb11uN` appears in that pool.
+- The package is **amd64-specific** — it stays a blocker for a fully multi-arch
+  image (§14). An `arm64` `.deb` exists in Debian ports if an arm64 build is
+  attempted; otherwise the images that need libssl 1.1 stay amd64-only.
+- This runtime lib is unrelated to `libssl-dev` (OpenSSL 3 headers) installed
+  earlier for building CPython etc.
 
 ### 4.6 User & permission model
 
@@ -189,7 +199,8 @@ runtimes (notably Python) from source.
 ### 4.7 GitHub Actions runner
 
 - Version pinned by `ENV GITHUB_RUNNER_VERSION` in the `Dockerfile`
-  (currently `2.328.0`).
+  (currently `2.337.0`). GitHub enforces a rolling minimum version for
+  self-hosted runners — bump this roughly monthly (§13.2).
 - Tarball `actions-runner-linux-x64-<version>.tar.gz` is downloaded and extracted
   to `~/github/actions-runner`, then the tarball is deleted.
 - `x64` only — same multi-arch caveat as §4.5.
@@ -206,41 +217,45 @@ Runs once, at image build time, as `runner`. Responsibilities:
    Android SDK paths, SonarScanner on `PATH`. Every interactive/login shell picks
    these up (entrypoint uses `bash -l`).
 2. **Homebrew/Linuxbrew** install (`NONINTERACTIVE=1`).
-3. **brew packages:** `asdf`, `fastlane`, `awscli`, `terraform`, `ruby`.
-   (Note `terraform` is installed both via brew and via asdf — see §9.)
+3. **brew packages:** `asdf`, `fastlane`, `awscli`, `ruby`.
+   (Terraform is provided via asdf only — the earlier brew duplicate was removed.)
 4. **asdf config:** `legacy_version_file = yes` in `~/.asdfrc` so a Node project
    with only a `.nvmrc` (no `.tool-versions`) still resolves a Node version.
 5. **asdf toolchains** via the `tools_install <plugin> <version>` helper
-   (`plugin add` → `install` → `set -u` global). Current pinned versions:
+   (`plugin add` → `install` → `set -u` global). Current pinned versions
+   (latest stable upstream as of 2026-09 — see §13 for the bump policy):
 
    | Tool | Version (var) |
    |---|---|
-   | Node.js | `22.20.0` (`NODEJS_VERSION`) |
-   | Python | `3.10.18` (`PYTHON_VERSION`) |
-   | Go | `1.25.1` (`GOLANG_VERSION`) |
-   | Java | `adoptopenjdk-17.0.16+8` (`JAVA_VERSION`) |
-   | Flutter | `3.35.5-stable` (`FLUTTER_VERSION`) |
-   | Terraform | `1.13.3` (`TERRAFORM_VERSION`) |
-   | kubectl | `1.34.1` (`KUBECTL_VERSION`) |
-   | Helm | `3.19.0` (`HELM_VERSION`) |
-   | SOPS | `3.11.0` (`SOPS_VERSION`) |
+   | Node.js | `24.20.0` (`NODEJS_VERSION`) — active LTS ("Krypton") |
+   | Python | `3.14.7` (`PYTHON_VERSION`) |
+   | Go | `1.27.1` (`GOLANG_VERSION`) |
+   | Java | `temurin-21.0.12+101.0.LTS` (`JAVA_VERSION`) — latest LTS the Android/Flutter toolchain supports; see §13 |
+   | Flutter | `3.47.2-stable` (`FLUTTER_VERSION`) — Dart 3.13.2 |
+   | Terraform | `1.16.1` (`TERRAFORM_VERSION`) — BSL-licensed (see §13) |
+   | kubectl | `1.37.0` (`KUBECTL_VERSION`) |
+   | Helm | `4.2.4` (`HELM_VERSION`) — **Helm 4** major line |
+   | SOPS | `3.13.3` (`SOPS_VERSION`) |
 
    asdf-java's `set-java-home.bash` is sourced from `~/.profile` so `JAVA_HOME`
    tracks the active asdf Java.
 6. **Android SDK** (`ANDROID_HOME=$HOME/android/sdk`):
-   - `commandlinetools-linux-13114758_latest.zip` unzipped and relocated to
+   - `commandlinetools-linux-15859902_latest.zip` unzipped and relocated to
      `$ANDROID_HOME/cmdline-tools/latest`.
    - `sdkmanager --licenses` accepted non-interactively.
-   - Installs `platform-tools`, `platforms;android-30`, `build-tools;32.0.0`.
+   - Installs `platform-tools`, `platforms;android-36`, `build-tools;36.0.0`.
    - Android env exported via `~/.profile` (`ANDROID_HOME`, `ANDROID_SDK_ROOT`,
      emulator/platform-tools/cmdline-tools on `PATH`).
-7. **SonarScanner CLI** `7.2.0.5079-linux-x64` unzipped to
+7. **SonarScanner CLI** `8.1.0.6389-linux-x64` unzipped to
    `$SONAR_HOME/sonar-scanner` (`SONAR_HOME=$HOME/sonarqube`), added to `PATH`.
+   (8.x bundles a Java 21 JRE.)
 8. `brew cleanup` at the end.
 
 **Contract for changing versions:** bump the `*_VERSION` variable at the top of
-`build.sh` (or the `Dockerfile` `ENV` for the GitHub runner). Keep the Android API
-level / build-tools roughly in step with the Flutter version's requirements.
+`build.sh` (or `GITHUB_RUNNER_VERSION` in the `Dockerfile`). Keep the Android API
+level / build-tools in step with the Flutter channel's requirements, and keep
+`JAVA_VERSION` on an LTS the Android Gradle Plugin supports. Run the §8 smoke test
+after any bump.
 
 ### 4.9 `docker-entrypoint.sh` — runtime contract
 
@@ -378,15 +393,15 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 
 | # | Issue | Impact | Suggested fix |
 |---|---|---|---|
-| 1 | `libssl1.1` `.deb` and GitHub runner tarball are **amd64/x64 only**. | No arm64 image (Apple Silicon devs, Graviton runners). | Arch-parametrised downloads; drop libssl1.1 if no consumer still needs it. See §13, §14. |
+| 1 | `libssl1.1` `.deb` and GitHub runner tarball are **amd64/x64 only**. | No arm64 image (Apple Silicon devs, Graviton runners). | Arch-parametrised downloads; for `libssl1.1` select the `arm64` bullseye `.deb` (it is kept by design — §4.5). See §13, §14. |
 | 2 | GitHub workflow `on.release` also lists `branches`/`tags` keys. | Ignored by GitHub for `release` events — misleading, may hide intent. | Remove the invalid keys; gate on `github.event.release.prerelease == false` if needed. |
 | 3 | `RUN newgrp docker` is a no-op. | Dead line. | Delete it. |
 | 4 | `git config --global --add safe.directory /home/gitlab-runner/builds*` — trailing `*` is literal. | Nested build dirs may still trip `detected dubious ownership`. | Use `safe.directory '*'` for a CI builder, or set it per-build in CI. |
 | 5 | GitLab Runner working dir `/home/gitlab-runner` ≠ user home `/home/runner`; dir is created implicitly. | Confusing; permissions can drift. | Pick one home, or `mkdir -p` + `chown` explicitly. |
-| 6 | Terraform installed twice (brew **and** asdf). | Ambiguous which is on `PATH`; wasted space. | Keep the asdf one (pinned), drop from brew. |
+| 6 | ~~Terraform installed twice (brew **and** asdf).~~ **Fixed 2026-09** — asdf only. | — | — |
 | 7 | Many `RUN` layers in `Dockerfile` (apt key steps, etc.). | Larger image, slower rebuilds. | Merge related `RUN`s; use `--mount=type=cache` for apt/brew. |
 | 8 | No `.dockerignore`. | `.git` and everything else sent as build context. | Add `.dockerignore` (`.git`, `docs`, CI files). |
-| 9 | Android `platforms;android-30` (Android 11, 2020) / `build-tools;32.0.0` are years behind. | Cannot build against a current `compileSdk`; Play Store target-API requirements not met; modern AGP/Flutter refuse these. | Bump to API 36 / `build-tools;36.0.0` and parametrise; keep in step with the Flutter channel. See §13. |
+| 9 | ~~Android `platforms;android-30` / `build-tools;32.0.0` years behind.~~ **Fixed 2026-09** → API 36 / `build-tools;36.0.0`. | — | Still not parametrised by `ARG`; keep in step with the Flutter channel on each bump. See §13. |
 | 10 | Neither runner is registerable without extra scripting. | Every consumer re-invents startup. | Ship `bin/register-gitlab.sh` / `bin/register-github.sh` helpers. |
 | 11 | Secrets (`SONAR_LOGIN`) passed as env and expanded into a process arg list. | Visible in `ps` inside the container. | Prefer `SONAR_TOKEN` via `sonar-scanner` native env, or a properties file. |
 | 12 | `build.sh` has no `set -euo pipefail`. | A failed tool install can pass silently and ship a broken image. | Add `set -Eeuo pipefail` and a post-install verification block. |
@@ -403,7 +418,7 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 - Add `.dockerignore`.
 - Add `hadolint` + `shellcheck` to CI (blocking).
 - `set -Eeuo pipefail` in `build.sh` + post-install `--version` verification block.
-- Remove dead lines (#3), fix `safe.directory` (#4), de-dupe Terraform (#6).
+- Remove dead lines (#3), fix `safe.directory` (#4). *(Terraform de-dup #6 done 2026-09.)*
 - Add OCI image labels with source/revision/build-date.
 
 ### Phase 2 — Reproducibility & release quality
@@ -415,21 +430,25 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 - Post-build smoke test + Trivy scan gates (§8).
 - Publish an SBOM (`syft`) alongside each release.
 
-### Phase 2b — Toolchain refresh (do alongside Phase 2; details in §13)
-- **Blocking:** bump the GitHub Actions runner to ≥ `2.329.0` (GitHub rejects
-  older self-hosted runners at registration since 2026-03).
-- **Time-boxed:** move Python off 3.10 before its 2026-10-31 EOL.
-- Bump Node → 24 LTS, Go → supported branch, Java → Temurin 21 (rename off the
-  `adoptopenjdk-…` identifier), Flutter → current stable, Android → API 36 /
-  build-tools 36, plus Terraform / kubectl / Helm (v4) / SOPS / SonarScanner.
-- Decide Terraform vs OpenTofu (Terraform is BSL-licensed since 1.6).
-- Re-evaluate whether `libssl1.1` is still needed after the bumps; aim to delete.
+### Phase 2b — Toolchain refresh — **done 2026-09** (see §13)
+- ✅ All language/CLI toolchains bumped to latest stable: GitHub runner `2.337.0`,
+  Node `24.20.0` LTS, Python `3.14.7`, Go `1.27.1`, Java `temurin-21`
+  (renamed off `adoptopenjdk-*`), Flutter `3.47.2`, Terraform `1.16.1`,
+  kubectl `1.37.0`, Helm `4.2.4`, SOPS `3.13.3`, SonarScanner `8.1`,
+  Android cmdline-tools `15859902` + API 36 / build-tools 36.
+- ⬜ **Verify Helm 4** against real chart installs before prod pipelines depend on it.
+- ⬜ **Decide Terraform vs OpenTofu** (Terraform is BSL-licensed since 1.6).
+- ✅ `libssl1.1` bumped to the newest bullseye-LTS backport (`deb11u8`); kept for
+  backward compat by design (§4.5). Re-check the pool for a newer `deb11uN` each audit.
+- ⬜ Revisit **Java 25** once the Android Gradle Plugin officially supports it.
+- Ongoing: re-run the §13 audit quarterly.
 
 ### Phase 3 — Multi-arch (details and constraints in §14)
 - Introduce `ARG TARGETARCH` / `TARGETOS`; map to each vendor's naming
   (`x64`/`amd64`, `arm64`/`aarch64`) for the GitHub runner tarball, SonarScanner,
   and any remaining arch-bound `.deb`.
-- Resolve or remove the `libssl1.1` dependency (its `.deb` is the hard amd64 pin).
+- For `libssl1.1` (kept by design) select the Debian bullseye **`arm64`** `.deb`
+  via `TARGETARCH` instead of the hard-coded `amd64` one.
 - `docker buildx` matrix building `linux/amd64` + `linux/arm64`, single manifest,
   **for the non-Android images only** — the Android SDK/emulator has no arm64
   Linux distribution, so a mobile-build image stays `linux/amd64` (documented).
@@ -483,50 +502,57 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 
 ---
 
-## 13. Toolchain currency audit (as of 2026-09)
+## 13. Toolchain currency audit
 
-Snapshot of every pinned version against what is current/supported. Re-run this
-audit each quarter; treat "🔴 obsolete" rows as release-blocking.
+Re-run this audit each quarter; treat any 🔴 row as release-blocking.
 
-| Component | Pinned | Current / supported (2026-09) | Status | Notes & action |
-|---|---|---|---|---|
-| **GitHub Actions runner** | `2.328.0` (`Dockerfile` ENV) | ≥ `2.329.0` **enforced** | 🔴 **broken** | GitHub refuses to register/run self-hosted runners below the enforced minimum (since 2026-03). Bump immediately; keep it near-latest since the floor moves. |
-| **Python** | `3.10.18` | 3.12 / 3.13 stable; **3.10 EOL 2026-10-31** (security-only now) | 🔴 obsolete imminently | Move to 3.12 (safe) or 3.13. Hard deadline ~2 months out. asdf compiles it from source, so system build headers (§4.2) must stay complete. |
-| **Android platform** | `platforms;android-30` (Android 11, 2020) | API 36 (Android 16) | 🔴 obsolete | Too old to be a `compileSdk` for current AGP/Flutter; fails Play Store target-API rules. Install `platforms;android-36`. |
-| **Android build-tools** | `32.0.0` | `36.0.0` | 🔴 obsolete | Bump with the platform. |
-| **Java** | `adoptopenjdk-17.0.16+8` | LTS: 17 (premier support ends 2026), **21**, **25** | 🟠 behind + stale name | "AdoptOpenJDK" was renamed **Eclipse Temurin / Adoptium** in 2021. Move to `temurin-21.…` (or 25). 17 still works but its free-update window is closing. |
-| **Node.js** | `22.20.0` | 22 = maintenance LTS; **24 = active LTS**; 26 → LTS 2026-10 | 🟠 behind | Move to 24.x LTS. Node 27+ (2026-10) makes every line LTS. |
-| **Go** | `1.25.1` | 1.27.x; Go supports only the **latest 2 minors** (1.26, 1.27) | 🟠 out of support window | Bump to 1.27.x (or 1.26.x). Security fixes only land on supported minors. |
-| **Flutter** | `3.35.5-stable` | current stable is many releases ahead | 🟠 behind | Bump to current stable; this also drives the Android SDK / JDK minimums above. Verify Dart version consumers. |
-| **Terraform** | `1.13.3` | 1.15.x | 🟠 behind + license | Bump. Also: Terraform is **BSL-licensed since 1.6** — if that is a problem, switch to **OpenTofu** (MPL fork, drop-in for now). |
-| **kubectl** | `1.34.1` | 1.37 latest | 🟠 behind | Keep within ±1 minor of the clusters you target (version-skew policy). Bump to match. |
-| **Helm** | `3.19.0` | **Helm 4.x** released 2026 | 🟠 major behind | Plan a Helm 4 migration; check chart/plugin compatibility before bumping the default. |
-| **SonarScanner CLI** | `7.2.0.5079` | `8.1` (2026-04) | 🟠 major behind | Bump. 8.x bundles a Java 21 JRE and adds a `linux-aarch64` build (useful for §14). |
-| **SOPS** | `3.11.0` | `3.13.x` | 🟢 minor behind | Low-risk patch bump. |
-| **Android cmdline-tools** | rev `13114758` (2024) | newer revision | 🟢 behind | Bump the download URL with the platform refresh. |
-| **libssl 1.1** | `1.1.1w-0+deb11u3` (Debian 11) | **OpenSSL 1.1.1 EOL 2023-09** — no patches | 🔴 liability | Unpatched crypto shipped in the image purely for legacy binary compat, and the hard amd64 pin (§14). Identify the actual consumer (candidates: old Android build-tools, old native Node modules); after the bumps above it is likely removable. Delete if nothing links `libssl.so.1.1`. |
-| **Ubuntu base** | `ubuntu:noble` (24.04 LTS) | 24.04 LTS current; 26.04 LTS due 2026-04 | 🟢 ok | Fine. Consider pinning by digest (or `ubuntu:24.04`) so the tag can't drift under you. The `Dockerfile` comment referencing "ubuntu:jammy" is stale — fix it. |
-| Homebrew / Linuxbrew | latest (unpinned) | 5.x | 🟢 ok | 5.0 (2025-11) made **arm64 Linux Tier-1**, so brew is no longer a multi-arch blocker. Unpinned = non-reproducible (see §9 #13). |
-| asdf | via brew (Go rewrite) | current | 🟢 ok | `asdf set -u` / `.tool-versions` usage matches the current Go-based asdf. `legacy_version_file = yes` (`.nvmrc` support) still valid. |
-| Ruby | brew `ruby` **+** implied by `fastlane` | — | 🟢 cleanup | `fastlane` pulls its own Ruby; the extra brew `ruby` (and the asdf ruby plugin, if ever added) is redundant. |
+### 13.0 State after the 2026-09 refresh
 
-### 13.1 Obsolete / dead weight to remove
+All language/CLI toolchains were moved to the latest stable upstream release on
+2026-09. Current pins:
 
-- **`RUN newgrp docker`** — no-op (spawns a subshell that exits). Delete.
-- **Terraform via brew** — also installed via asdf (pinned). Keep asdf, drop brew.
-- **Redundant Ruby** — see table.
-- **`libssl1.1` shim** — remove once its consumer is gone (see table / §14).
-- **`android-30` / `build-tools;32.0.0`** — replace, don't keep alongside new ones
-  unless a real project still targets them.
-- **`adoptopenjdk-*` identifier** — migrate to the Temurin/Adoptium name.
+| Component | Pinned now | Status | Residual notes |
+|---|---|---|---|
+| GitHub Actions runner | `2.337.0` (`Dockerfile` ENV) | 🟢 current | GitHub raises the enforced minimum every few months — bump ~monthly (see §13.2). |
+| Node.js | `24.20.0` (active LTS "Krypton") | 🟢 current | Stay on the **active LTS** line, not "Current". Node 27 (2026-10) makes all lines LTS. |
+| Python | `3.14.7` | 🟢 current | 3.10 (previous pin) reaches EOL 2026-10-31. asdf builds it from source → keep §4.2 headers complete. |
+| Go | `1.27.1` | 🟢 current | Go supports only the latest 2 minors; bump on each new minor. |
+| Java | `temurin-21.0.12+101.0.LTS` | 🟢 current LTS *(deliberately not 25)* | Temurin **25** exists but Android Gradle Plugin / Flutter 3.47 only officially support running on JDK ≤ 21. Revisit 25 once AGP declares support. Renamed off the old `adoptopenjdk-*` id. |
+| Flutter | `3.47.2-stable` (Dart 3.13.2) | 🟢 current | Drives the Android SDK + JDK minimums. |
+| Terraform | `1.16.1` | 🟢 current, ⚠️ license | **BSL-licensed since 1.6.** If the licence is a problem, swap the asdf plugin for **OpenTofu** (`opentofu`, MPL, still drop-in). |
+| kubectl | `1.37.0` | 🟢 current | Keep within ±1 minor of the clusters you target. |
+| Helm | `4.2.4` | 🟠 **major bump — verify** | Moved from Helm 3 to **Helm 4**. Re-test chart installs, `helm` plugins, and any `helm template` output diffs before relying on it in prod pipelines. Helm 3 is EOL. |
+| SonarScanner CLI | `8.1.0.6389` | 🟢 current | 8.x bundles a Java 21 JRE; also ships a `linux-aarch64` build (useful for §14). |
+| SOPS | `3.13.3` | 🟢 current | — |
+| Android cmdline-tools | rev `15859902` | 🟢 current | Bump the URL alongside the platform. |
+| Android platform / build-tools | `android-36` / `36.0.0` | 🟢 current | Keep in step with the Flutter channel and Play Store target-API rules. |
+| **libssl 1.1** | `1.1.1w-0+deb11u8` (Debian 11 LTS) | 🟢 latest available *(kept by design)* | Retained for backward compat with binaries that link `libssl.so.1.1` (§4.5). Upstream OpenSSL 1.1.1 ended at `1.1.1w`; Debian 11 LTS backports CVE fixes as `deb11uN` and `u8` is the newest. **Action each audit:** check the `debian-security` OpenSSL pool for a higher `deb11uN` and bump `LIBSSL_PACKAGE`. Still amd64-only → see §14. |
+| Ubuntu base | `ubuntu:noble` (24.04 LTS) | 🟢 ok | 24.04 LTS supported to 2029. Not moved to 26.04 — that is an OS migration, tracked separately. Consider pinning by digest so the tag can't drift. |
+| Homebrew / Linuxbrew | latest (unpinned) | 🟢 ok | arm64 Linux is Tier-1 since brew 5.0. Unpinned = non-reproducible (§9 #13). |
+| asdf | via brew (Go rewrite) | 🟢 ok | `asdf set -u` / `.tool-versions` usage is current. `.nvmrc` support via `legacy_version_file = yes`. |
+
+### 13.1 Cleanup done in the 2026-09 refresh
+
+- **Terraform brew duplicate removed** — it is now asdf-only (was installed by
+  both, asdf shim always won).
+- **`adoptopenjdk-*` → `temurin-*`** identifier.
+- **Android `android-30` / `build-tools;32.0.0` → `android-36` / `36.0.0`.**
+- **`libssl1.1` bumped** `deb11u3` → `deb11u8` (newest bullseye-LTS backport) and
+  the `Dockerfile` comment corrected. Kept by design (§4.5), not removed.
+
+### 13.1a Still outstanding (not version bumps)
+
+- **`RUN newgrp docker`** — no-op, delete.
+- **Redundant Ruby** — `fastlane` pulls its own Ruby; the extra brew `ruby` is
+  probably removable (verify nothing calls `ruby` directly first).
 - **GitHub workflow `on.release.branches` / `tags` keys** — invalid for the
   `release` event, silently ignored. Remove.
-- **Stale `Dockerfile` comment** ("ubuntu:jammy" while base is `noble`).
 
 ### 13.2 Suggested cadence
 
 - **Monthly:** GitHub Actions runner (moving floor), base-OS security rebuild.
-- **Quarterly:** re-run this table; bump patch/minor toolchains.
+- **Quarterly:** re-run this table; bump patch/minor toolchains; check the
+  `debian-security` OpenSSL pool for a newer `libssl1.1` `deb11uN`.
 - **On upstream release:** Flutter stable, Node LTS promotion, Kubernetes minor,
   Java LTS.
 - Gate every bump on the §8 smoke test.
@@ -554,7 +580,7 @@ large but avoids native-module compatibility surprises.
 
 | Blocker | Detail | Fix path |
 |---|---|---|
-| `LIBSSL_PACKAGE=…_amd64.deb` | Filename hard-codes `amd64`; fetched from Debian 11. | Remove the shim (preferred, see §13), or select the `arm64` `.deb` via `TARGETARCH`. |
+| `LIBSSL_PACKAGE=…_amd64.deb` | Filename hard-codes `amd64`; fetched from Debian 11 LTS. Kept by design (§4.5). | Select the bullseye `arm64` `.deb` via `TARGETARCH` (Debian 11 publishes one). |
 | `actions-runner-linux-**x64**-…tar.gz` | GitHub publishes `linux-arm64` too, but the URL is hard-coded to `x64`. | Map `TARGETARCH` → `x64`/`arm64`. |
 | Android `commandlinetools-**linux**-….zip` | Google ships cmdline-tools, platform-tools and the emulator **only for linux x86-64**. There is no arm64 Linux Android SDK. | None for the SDK itself. A mobile-build image stays `linux/amd64`. Non-mobile images can go multi-arch. |
 | SonarScanner `…-linux-x64.zip` | 7.2 is x64-only; 8.x adds `linux-aarch64` (or use the no-JRE build + system Java). | Bump to 8.x and pick by arch. |

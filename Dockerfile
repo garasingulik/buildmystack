@@ -2,7 +2,7 @@ FROM ubuntu:noble
 
 # disable prompt
 ENV DEBIAN_FRONTEND=noninteractive
-ENV GITHUB_RUNNER_VERSION=2.328.0
+ENV GITHUB_RUNNER_VERSION=2.337.0
 
 # install required packages
 RUN apt update && apt install -y locales build-essential git curl sudo make jq unzip libssl-dev zlib1g-dev \
@@ -25,8 +25,13 @@ RUN apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-bu
 RUN curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | bash
 RUN apt install -y gitlab-runner
 
-# install open ssl 1.1.1 for backward compatibility (ubuntu:jammy)
-ENV LIBSSL_PACKAGE=libssl1.1_1.1.1w-0+deb11u3_amd64.deb
+# install openssl 1.1.1 (libssl.so.1.1) for backward compatibility with tools /
+# prebuilt binaries that still link OpenSSL 1.1 (not shipped on ubuntu:noble).
+# OpenSSL 1.1.1 upstream ended at 1.1.1w; Debian 11 (bullseye) LTS keeps
+# backporting security fixes as deb11uN — pin the newest available from the
+# debian-security pool. Check for a newer patch level at:
+#   http://security.debian.org/debian-security/pool/updates/main/o/openssl/
+ENV LIBSSL_PACKAGE=libssl1.1_1.1.1w-0+deb11u8_amd64.deb
 RUN curl -o /tmp/$LIBSSL_PACKAGE http://security.debian.org/debian-security/pool/updates/main/o/openssl/$LIBSSL_PACKAGE
 RUN apt install -y /tmp/$LIBSSL_PACKAGE
 
