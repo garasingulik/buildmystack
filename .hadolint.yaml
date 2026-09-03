@@ -12,3 +12,6 @@ ignored:
   - DL3059
   # non-numeric UID for runner: intentional.
   - DL3066
+  # `. /etc/os-release` in a RUN: shellcheck cannot follow it at lint time, but
+  # the file always exists in the base image.
+  - SC1091

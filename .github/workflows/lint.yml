@@ -18,7 +18,6 @@ jobs:
         with:
           dockerfile: Dockerfile
           config: .hadolint.yaml
-          failure-threshold: info
 
   shellcheck:
     name: shellcheck (scripts)

@@ -382,8 +382,10 @@ Today these are edited in-file. §10 proposes promoting them to `ARG`s.
    docker-entrypoint.sh`** run **blocking** in both pipelines — GitLab
    (`.gitlab-ci.yml` `lint` stage, on every branch/MR) and GitHub
    (`.github/workflows/lint.yml`, on push to `main` + every PR). Config:
-   `.hadolint.yaml` (`failure-threshold: info`, with a short `ignored` list of
-   accepted debt) and `.shellcheckrc`.
+   `.hadolint.yaml` (`failure-threshold: info`; `ignored` = accepted debt
+   `DL3004`/`DL3008`/`DL3015`/`DL3059`/`DL3066` plus `SC1091` for the
+   unfollowable `. /etc/os-release`) and `.shellcheckrc` (`SC1090`/`SC1091` for
+   the `~/.profile` re-source).
 2. ✅ **In-build toolchain verification** — `build.sh` ends with a `--version`
    check of every tool (`node`, `python`, `go`, `java`, `flutter`, `terraform`,
    `kubectl`, `helm`, `sops`, `sonar-scanner`, `sdkmanager`); with `set -e` a
