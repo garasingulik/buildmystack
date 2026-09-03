@@ -1,6 +1,6 @@
 # Build-My-Stack — Specification
 
-Status: living document · Last updated: 2026-09-03
+Status: living document · Last updated: 2026-09-03 · Toolchain audit: §13 (2026-09)
 
 This document describes what the `buildmystack` repository produces today, how the
 pieces fit together, the contracts each piece must honour, and the direction for
@@ -372,9 +372,13 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 
 ## 9. Known issues / tech debt
 
+> **See also:** §13 (Toolchain currency audit — what is behind or obsolete) and
+> §14 (OS & architecture compatibility). The items below are structural; §13/§14
+> are about the specific versions pinned today.
+
 | # | Issue | Impact | Suggested fix |
 |---|---|---|---|
-| 1 | `libssl1.1` `.deb` and GitHub runner tarball are **amd64/x64 only**. | No arm64 image (Apple Silicon devs, Graviton runners). | Arch-parametrised downloads; drop libssl1.1 if no consumer still needs it. |
+| 1 | `libssl1.1` `.deb` and GitHub runner tarball are **amd64/x64 only**. | No arm64 image (Apple Silicon devs, Graviton runners). | Arch-parametrised downloads; drop libssl1.1 if no consumer still needs it. See §13, §14. |
 | 2 | GitHub workflow `on.release` also lists `branches`/`tags` keys. | Ignored by GitHub for `release` events — misleading, may hide intent. | Remove the invalid keys; gate on `github.event.release.prerelease == false` if needed. |
 | 3 | `RUN newgrp docker` is a no-op. | Dead line. | Delete it. |
 | 4 | `git config --global --add safe.directory /home/gitlab-runner/builds*` — trailing `*` is literal. | Nested build dirs may still trip `detected dubious ownership`. | Use `safe.directory '*'` for a CI builder, or set it per-build in CI. |
@@ -382,7 +386,7 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 | 6 | Terraform installed twice (brew **and** asdf). | Ambiguous which is on `PATH`; wasted space. | Keep the asdf one (pinned), drop from brew. |
 | 7 | Many `RUN` layers in `Dockerfile` (apt key steps, etc.). | Larger image, slower rebuilds. | Merge related `RUN`s; use `--mount=type=cache` for apt/brew. |
 | 8 | No `.dockerignore`. | `.git` and everything else sent as build context. | Add `.dockerignore` (`.git`, `docs`, CI files). |
-| 9 | Android `platforms;android-30` / `build-tools;32.0.0` are old vs Flutter 3.35. | Modern Android/Flutter builds may need API 34/35 + build-tools 34+. | Bump to match the Flutter channel; parametrise. |
+| 9 | Android `platforms;android-30` (Android 11, 2020) / `build-tools;32.0.0` are years behind. | Cannot build against a current `compileSdk`; Play Store target-API requirements not met; modern AGP/Flutter refuse these. | Bump to API 36 / `build-tools;36.0.0` and parametrise; keep in step with the Flutter channel. See §13. |
 | 10 | Neither runner is registerable without extra scripting. | Every consumer re-invents startup. | Ship `bin/register-gitlab.sh` / `bin/register-github.sh` helpers. |
 | 11 | Secrets (`SONAR_LOGIN`) passed as env and expanded into a process arg list. | Visible in `ps` inside the container. | Prefer `SONAR_TOKEN` via `sonar-scanner` native env, or a properties file. |
 | 12 | `build.sh` has no `set -euo pipefail`. | A failed tool install can pass silently and ship a broken image. | Add `set -Eeuo pipefail` and a post-install verification block. |
@@ -411,11 +415,24 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
 - Post-build smoke test + Trivy scan gates (§8).
 - Publish an SBOM (`syft`) alongside each release.
 
-### Phase 3 — Multi-arch
-- Parametrise arch for the GitHub runner tarball and Android tools.
-- Resolve the `libssl1.1` dependency: confirm which consumer needs it; if none,
-  drop it; if some, source an arm64 build or a static shim.
-- `docker buildx` matrix building `linux/amd64` + `linux/arm64`, single manifest.
+### Phase 2b — Toolchain refresh (do alongside Phase 2; details in §13)
+- **Blocking:** bump the GitHub Actions runner to ≥ `2.329.0` (GitHub rejects
+  older self-hosted runners at registration since 2026-03).
+- **Time-boxed:** move Python off 3.10 before its 2026-10-31 EOL.
+- Bump Node → 24 LTS, Go → supported branch, Java → Temurin 21 (rename off the
+  `adoptopenjdk-…` identifier), Flutter → current stable, Android → API 36 /
+  build-tools 36, plus Terraform / kubectl / Helm (v4) / SOPS / SonarScanner.
+- Decide Terraform vs OpenTofu (Terraform is BSL-licensed since 1.6).
+- Re-evaluate whether `libssl1.1` is still needed after the bumps; aim to delete.
+
+### Phase 3 — Multi-arch (details and constraints in §14)
+- Introduce `ARG TARGETARCH` / `TARGETOS`; map to each vendor's naming
+  (`x64`/`amd64`, `arm64`/`aarch64`) for the GitHub runner tarball, SonarScanner,
+  and any remaining arch-bound `.deb`.
+- Resolve or remove the `libssl1.1` dependency (its `.deb` is the hard amd64 pin).
+- `docker buildx` matrix building `linux/amd64` + `linux/arm64`, single manifest,
+  **for the non-Android images only** — the Android SDK/emulator has no arm64
+  Linux distribution, so a mobile-build image stays `linux/amd64` (documented).
 
 ### Phase 4 — Modularisation (optional, only if image size hurts)
 - Split into a `core` image (git, build-essential, asdf, Node/Python/Go/Java,
@@ -463,3 +480,106 @@ Currently there are **no automated checks**. Recommended, in rough priority orde
   get picked up even without a code change.
 - Prefer token-based Sonar auth over `SONAR_LOGIN`/`SONAR_PASSWORD` on the process
   command line.
+
+---
+
+## 13. Toolchain currency audit (as of 2026-09)
+
+Snapshot of every pinned version against what is current/supported. Re-run this
+audit each quarter; treat "🔴 obsolete" rows as release-blocking.
+
+| Component | Pinned | Current / supported (2026-09) | Status | Notes & action |
+|---|---|---|---|---|
+| **GitHub Actions runner** | `2.328.0` (`Dockerfile` ENV) | ≥ `2.329.0` **enforced** | 🔴 **broken** | GitHub refuses to register/run self-hosted runners below the enforced minimum (since 2026-03). Bump immediately; keep it near-latest since the floor moves. |
+| **Python** | `3.10.18` | 3.12 / 3.13 stable; **3.10 EOL 2026-10-31** (security-only now) | 🔴 obsolete imminently | Move to 3.12 (safe) or 3.13. Hard deadline ~2 months out. asdf compiles it from source, so system build headers (§4.2) must stay complete. |
+| **Android platform** | `platforms;android-30` (Android 11, 2020) | API 36 (Android 16) | 🔴 obsolete | Too old to be a `compileSdk` for current AGP/Flutter; fails Play Store target-API rules. Install `platforms;android-36`. |
+| **Android build-tools** | `32.0.0` | `36.0.0` | 🔴 obsolete | Bump with the platform. |
+| **Java** | `adoptopenjdk-17.0.16+8` | LTS: 17 (premier support ends 2026), **21**, **25** | 🟠 behind + stale name | "AdoptOpenJDK" was renamed **Eclipse Temurin / Adoptium** in 2021. Move to `temurin-21.…` (or 25). 17 still works but its free-update window is closing. |
+| **Node.js** | `22.20.0` | 22 = maintenance LTS; **24 = active LTS**; 26 → LTS 2026-10 | 🟠 behind | Move to 24.x LTS. Node 27+ (2026-10) makes every line LTS. |
+| **Go** | `1.25.1` | 1.27.x; Go supports only the **latest 2 minors** (1.26, 1.27) | 🟠 out of support window | Bump to 1.27.x (or 1.26.x). Security fixes only land on supported minors. |
+| **Flutter** | `3.35.5-stable` | current stable is many releases ahead | 🟠 behind | Bump to current stable; this also drives the Android SDK / JDK minimums above. Verify Dart version consumers. |
+| **Terraform** | `1.13.3` | 1.15.x | 🟠 behind + license | Bump. Also: Terraform is **BSL-licensed since 1.6** — if that is a problem, switch to **OpenTofu** (MPL fork, drop-in for now). |
+| **kubectl** | `1.34.1` | 1.37 latest | 🟠 behind | Keep within ±1 minor of the clusters you target (version-skew policy). Bump to match. |
+| **Helm** | `3.19.0` | **Helm 4.x** released 2026 | 🟠 major behind | Plan a Helm 4 migration; check chart/plugin compatibility before bumping the default. |
+| **SonarScanner CLI** | `7.2.0.5079` | `8.1` (2026-04) | 🟠 major behind | Bump. 8.x bundles a Java 21 JRE and adds a `linux-aarch64` build (useful for §14). |
+| **SOPS** | `3.11.0` | `3.13.x` | 🟢 minor behind | Low-risk patch bump. |
+| **Android cmdline-tools** | rev `13114758` (2024) | newer revision | 🟢 behind | Bump the download URL with the platform refresh. |
+| **libssl 1.1** | `1.1.1w-0+deb11u3` (Debian 11) | **OpenSSL 1.1.1 EOL 2023-09** — no patches | 🔴 liability | Unpatched crypto shipped in the image purely for legacy binary compat, and the hard amd64 pin (§14). Identify the actual consumer (candidates: old Android build-tools, old native Node modules); after the bumps above it is likely removable. Delete if nothing links `libssl.so.1.1`. |
+| **Ubuntu base** | `ubuntu:noble` (24.04 LTS) | 24.04 LTS current; 26.04 LTS due 2026-04 | 🟢 ok | Fine. Consider pinning by digest (or `ubuntu:24.04`) so the tag can't drift under you. The `Dockerfile` comment referencing "ubuntu:jammy" is stale — fix it. |
+| Homebrew / Linuxbrew | latest (unpinned) | 5.x | 🟢 ok | 5.0 (2025-11) made **arm64 Linux Tier-1**, so brew is no longer a multi-arch blocker. Unpinned = non-reproducible (see §9 #13). |
+| asdf | via brew (Go rewrite) | current | 🟢 ok | `asdf set -u` / `.tool-versions` usage matches the current Go-based asdf. `legacy_version_file = yes` (`.nvmrc` support) still valid. |
+| Ruby | brew `ruby` **+** implied by `fastlane` | — | 🟢 cleanup | `fastlane` pulls its own Ruby; the extra brew `ruby` (and the asdf ruby plugin, if ever added) is redundant. |
+
+### 13.1 Obsolete / dead weight to remove
+
+- **`RUN newgrp docker`** — no-op (spawns a subshell that exits). Delete.
+- **Terraform via brew** — also installed via asdf (pinned). Keep asdf, drop brew.
+- **Redundant Ruby** — see table.
+- **`libssl1.1` shim** — remove once its consumer is gone (see table / §14).
+- **`android-30` / `build-tools;32.0.0`** — replace, don't keep alongside new ones
+  unless a real project still targets them.
+- **`adoptopenjdk-*` identifier** — migrate to the Temurin/Adoptium name.
+- **GitHub workflow `on.release.branches` / `tags` keys** — invalid for the
+  `release` event, silently ignored. Remove.
+- **Stale `Dockerfile` comment** ("ubuntu:jammy" while base is `noble`).
+
+### 13.2 Suggested cadence
+
+- **Monthly:** GitHub Actions runner (moving floor), base-OS security rebuild.
+- **Quarterly:** re-run this table; bump patch/minor toolchains.
+- **On upstream release:** Flutter stable, Node LTS promotion, Kubernetes minor,
+  Java LTS.
+- Gate every bump on the §8 smoke test.
+
+---
+
+## 14. OS & architecture compatibility
+
+### 14.1 Where the image can run
+
+| Host | Supported | Notes |
+|---|---|---|
+| Native Linux x86-64 | ✅ | Primary target. |
+| Linux arm64 | ❌ (today) | See blockers below. Non-Android tools *could* support it. |
+| Docker Desktop — macOS (Apple Silicon) | ⚠️ emulated | Runs the `linux/amd64` image under Rosetta/QEMU. Works for most builds; slow; **Android emulator will not run**. |
+| Docker Desktop — macOS (Intel) | ✅ | Native `linux/amd64` in the Docker VM. |
+| Docker Desktop / WSL2 — Windows | ✅ | Linux container in the WSL2/LinuxKit VM. No Windows-container support (and none is feasible — the toolchain is Linux/Android). |
+| Podman / containerd / nerdctl | ✅ | OCI image; `sudo`+`docker` group assumptions still apply. Rootless Podman changes uid mapping — DinD/socket needs extra care. |
+| Kubernetes (as a runner pod) | ✅ | Needs a privileged sidecar or mounted socket for DinD; `runner` uid must be allowed by PodSecurity. |
+
+The image is **glibc / Ubuntu** based — no musl/Alpine variant. That keeps it
+large but avoids native-module compatibility surprises.
+
+### 14.2 Why it is `linux/amd64`-only today
+
+| Blocker | Detail | Fix path |
+|---|---|---|
+| `LIBSSL_PACKAGE=…_amd64.deb` | Filename hard-codes `amd64`; fetched from Debian 11. | Remove the shim (preferred, see §13), or select the `arm64` `.deb` via `TARGETARCH`. |
+| `actions-runner-linux-**x64**-…tar.gz` | GitHub publishes `linux-arm64` too, but the URL is hard-coded to `x64`. | Map `TARGETARCH` → `x64`/`arm64`. |
+| Android `commandlinetools-**linux**-….zip` | Google ships cmdline-tools, platform-tools and the emulator **only for linux x86-64**. There is no arm64 Linux Android SDK. | None for the SDK itself. A mobile-build image stays `linux/amd64`. Non-mobile images can go multi-arch. |
+| SonarScanner `…-linux-x64.zip` | 7.2 is x64-only; 8.x adds `linux-aarch64` (or use the no-JRE build + system Java). | Bump to 8.x and pick by arch. |
+| `docker` apt source | Already arch-aware (`dpkg --print-architecture`). | — none. |
+| Homebrew | arm64 Linux is Tier-1 since brew 5.0. | — none. |
+| asdf toolchains | Node, Go, Java (Temurin), Terraform, kubectl, Helm, SOPS all ship `linux-arm64`; Python builds from source. | — none. |
+
+### 14.3 Recommended architecture strategy
+
+1. **Split the image by purpose** (also §10 Phase 4):
+   - `buildmystack-core` / `-web` / `-infra` — no Android SDK →
+     **multi-arch `linux/amd64` + `linux/arm64`**.
+   - `buildmystack-android` (or `-mobile`) — includes the Android SDK →
+     **`linux/amd64` only**, stated in its docs and enforced with
+     `--platform=linux/amd64` in downstream pipelines.
+2. **Parametrise arch** in the `Dockerfile`:
+   ```dockerfile
+   ARG TARGETOS TARGETARCH
+   # gh runner:  x64 when amd64, arm64 when arm64
+   # sonar:      x64 / aarch64
+   ```
+   Use `docker buildx build --platform linux/amd64,linux/arm64` and publish a
+   manifest list under one tag.
+3. **Keep `linux/amd64` authoritative for CI** until arm64 images have their own
+   smoke-test run (§8), so a broken arm64 layer can't block amd64 releases.
+4. **Document** for consumers: Apple-Silicon developers pulling the multi-arch
+   `core` image get a native arm64 container; anyone needing Android must run the
+   amd64 mobile image emulated (slow) or on an amd64 CI runner.

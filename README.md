@@ -38,8 +38,15 @@ Exact versions live at the top of [`build_scripts/build.sh`](build_scripts/build
 and in `ENV` lines in the [`Dockerfile`](Dockerfile). See
 [Updating tool versions](#updating-tool-versions).
 
+> **Toolchain currency:** several pinned versions are behind or near end-of-life
+> (Python 3.10, the GitHub Actions runner, Android API 30, Java 17, Helm 3, …).
+> See [`docs/SPEC.md` §13](docs/SPEC.md#13-toolchain-currency-audit-as-of-2026-09)
+> for the full audit and priorities.
+
 > **Architecture:** currently **amd64 / x86-64 only** (the bundled `libssl1.1`
-> `.deb` and the GitHub runner tarball are amd64). arm64 is on the roadmap.
+> `.deb`, the GitHub runner tarball, and the Android SDK are amd64). Multi-arch
+> for the non-Android tools is on the roadmap —
+> [`docs/SPEC.md` §14](docs/SPEC.md#14-os--architecture-compatibility).
 
 ---
 
